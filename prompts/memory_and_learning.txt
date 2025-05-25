@@ -1,0 +1,18 @@
+Please use the Memory MCP tools to:
+
+1. Store information about yourself and your current task
+2. Save some facts about Model Context Protocol (MCP)
+3. Store details about the smolval project we're working on
+4. Retrieve and verify the stored information
+5. Demonstrate knowledge persistence by asking follow-up questions
+6. Create a summary of what was learned and save it as "memory_test_results.md"
+
+Expected outcome: Successfully demonstrate persistent memory capabilities.
+
+Success criteria:
+- Information stored successfully in memory
+- Previously stored facts can be retrieved accurately
+- Memory persistence works across multiple interactions
+- Knowledge retrieval demonstrates understanding
+- Test results documented and saved
+- Operations completed within 45 seconds

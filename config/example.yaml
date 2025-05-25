@@ -1,0 +1,38 @@
+mcp_servers:
+  # No API key required - basic file operations
+  - name: "filesystem"
+    command: ["npx", "@modelcontextprotocol/server-filesystem", "/tmp"]
+    env: {}
+  
+  # No API key required - persistent memory 
+  - name: "memory"
+    command: ["npx", "@modelcontextprotocol/server-memory"]
+    env: {}
+  
+  # No API key required - local database
+  - name: "sqlite"
+    command: ["npx", "@modelcontextprotocol/server-sqlite", "./data/example.db"]
+    env: {}
+
+  # Optional servers requiring API keys (comment out if not needed)
+  # - name: "brave_search" 
+  #   command: ["npx", "@modelcontextprotocol/server-brave-search"]
+  #   env:
+  #     BRAVE_API_KEY: "${BRAVE_API_KEY}"
+  # - name: "github"
+  #   command: ["npx", "@modelcontextprotocol/server-github"]
+  #   env:
+  #     GITHUB_PERSONAL_ACCESS_TOKEN: "${GITHUB_TOKEN}"
+
+llm:
+  provider: "anthropic"  # or "openai"
+  model: "claude-sonnet-4-20250514"  # Latest Claude 4 Sonnet (May 2025)
+  # Alternative models:
+  # model: "claude-3-7-sonnet-20250219"  # Claude 3.7 Sonnet (Feb 2025) 
+  # model: "claude-3-5-sonnet-20241022"  # Claude 3.5 Sonnet (Oct 2024)
+  temperature: 0.1
+
+evaluation:
+  timeout_seconds: 60
+  max_iterations: 10
+  output_format: "json"

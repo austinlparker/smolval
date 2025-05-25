@@ -1,0 +1,21 @@
+Please use multiple MCP tools in combination to:
+
+1. Create a project directory structure using filesystem tools
+2. Store project metadata in memory (name, purpose, creation date)
+3. Create a simple SQLite database with a "tasks" table
+4. Insert some sample task data into the database
+5. Query the database to retrieve all tasks
+6. Save the query results to a file called "project_tasks.json"
+7. Use memory to recall the project details you stored earlier
+8. Create a final project summary combining all the information
+
+Expected outcome: Successfully demonstrate multi-server coordination and data flow.
+
+Success criteria:
+- Directory structure created successfully
+- Project metadata stored and retrieved from memory
+- Database created with sample data
+- Query results exported to JSON file
+- Memory retrieval works correctly
+- Final summary combines all data sources
+- Operations completed within 75 seconds

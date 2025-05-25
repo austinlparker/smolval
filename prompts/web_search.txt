@@ -1,0 +1,15 @@
+Please use the available MCP tools to:
+
+1. Search for information about "Model Context Protocol"
+2. Find the official documentation or specification
+3. Summarize the key features and benefits
+4. Save your findings to a file called "mcp_research.txt"
+
+Expected outcome: Successfully demonstrate web search capabilities and file creation.
+
+Success criteria:
+- Web search executed successfully
+- Relevant information about MCP retrieved
+- Summary contains accurate technical details
+- Results saved to file
+- Operations completed within 60 seconds

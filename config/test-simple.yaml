@@ -1,0 +1,12 @@
+mcp_servers: []  # No servers for simple test
+
+llm:
+  provider: "anthropic"
+  model: "claude-sonnet-4-20250514"
+  api_key: "${ANTHROPIC_API_KEY}"
+  temperature: 0.1
+
+evaluation:
+  timeout_seconds: 120
+  max_iterations: 15
+  output_format: "json"

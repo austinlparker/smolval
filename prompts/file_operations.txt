@@ -1,0 +1,14 @@
+Please use the available MCP tools to:
+
+1. List files in the current directory
+2. Read the contents of any .txt files found  
+3. Create a new file called "test_output.txt" with a summary of what you discovered
+4. Confirm the file was created successfully
+
+Expected outcome: Successfully demonstrate basic file system operations including reading, writing, and listing files.
+
+Success criteria:
+- File listing completed without errors
+- At least one .txt file read successfully  
+- New file created with meaningful content
+- Operations completed within 30 seconds

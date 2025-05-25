@@ -1,0 +1,17 @@
+Please use the Brave Search MCP tools to:
+
+1. Search for recent information about "LLM agent frameworks 2024"
+2. Find the top 5 most relevant articles or blog posts
+3. Extract key insights about current trends in LLM agent development
+4. Search for specific information about "ReAct pattern LLM agents"
+5. Compile a research report with citations and save it as "llm_agent_research.md"
+
+Expected outcome: Successfully demonstrate web search capabilities and research synthesis.
+
+Success criteria:
+- Web searches execute without errors
+- At least 5 relevant sources found and analyzed
+- Key trends and insights identified
+- ReAct pattern information included
+- Research report saved with proper citations
+- Operations completed within 90 seconds

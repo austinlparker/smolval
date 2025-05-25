@@ -1,0 +1,30 @@
+mcp_servers:
+  # Filesystem server for basic file operations
+  - name: "filesystem"
+    command: ["npx", "@modelcontextprotocol/server-filesystem", "/tmp"]
+    env: {}
+  
+  # Memory server for persistent knowledge storage
+  - name: "memory"
+    command: ["npx", "@modelcontextprotocol/server-memory"]
+    env: {}
+  
+  # SQLite server for local database operations (via Docker)
+  - name: "sqlite"
+    command: ["docker", "run", "--rm", "-i", "-v", "mcp-test:/mcp", "mcp/sqlite", "--db-path", "/mcp/test.db"]
+    env: {}
+
+llm:
+  provider: "anthropic"  # or "openai" 
+  model: "claude-4-sonnet"  # Claude 4 Sonnet
+  api_key: "${ANTHROPIC_API_KEY}"  # Set this environment variable
+  # Alternative models for llm library:
+  # model: "gpt-4o-mini"  # OpenAI GPT-4o Mini
+  # model: "gpt-4"  # OpenAI GPT-4
+  # model: "claude-3.5-sonnet"  # Claude 3.5 Sonnet
+  temperature: 0.1
+
+evaluation:
+  timeout_seconds: 120
+  max_iterations: 15
+  output_format: "json"
