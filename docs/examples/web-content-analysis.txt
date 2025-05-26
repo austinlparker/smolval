@@ -1,0 +1,16 @@
+Test web content fetching capabilities to verify MCP fetch server functionality:
+
+1. Fetch the content from https://httpbin.org/get to test basic HTTP GET functionality
+2. Analyze the response to confirm it contains proper JSON structure with headers and other metadata
+3. Try fetching https://httpbin.org/json to test JSON content retrieval
+4. Extract and summarize the key information from the JSON response
+5. Test error handling by attempting to fetch from an invalid URL like https://invalid-domain-that-does-not-exist.com
+6. Fetch content from https://example.com and extract the page title and main content
+
+Success criteria:
+- HTTP GET requests return valid responses
+- JSON content is properly parsed and analyzed
+- Invalid URLs return appropriate error messages rather than crashing
+- HTML content can be parsed to extract meaningful information
+- All successful requests complete within 15 seconds
+- Error cases are handled gracefully without terminating the evaluation

@@ -1,0 +1,24 @@
+Performance benchmark test to measure MCP server response times and throughput:
+
+1. Measure baseline performance by listing files in a directory 5 times and recording the average time
+2. Test file reading performance by reading 10 different files sequentially and measuring total time
+3. Measure concurrent operation handling by requesting multiple file operations simultaneously
+4. Test large file handling by reading a file larger than 1MB (create one if needed)
+5. Benchmark search operations by finding all files with specific extensions (.py, .js, .md)
+6. Test memory usage by performing 20 consecutive file operations without cleanup
+7. Measure error recovery time by triggering an error and then performing a successful operation
+
+Performance targets:
+- Directory listing: < 2 seconds per operation
+- File reading: < 1 second per file for files under 100KB
+- Large file reading: < 5 seconds for files up to 10MB
+- Search operations: < 3 seconds for recursive directory search
+- Error recovery: < 1 second to return to normal operation
+- Memory usage: No significant memory leaks over 20 operations
+
+Success criteria:
+- All operations complete within target times
+- No memory leaks or resource exhaustion
+- Error recovery is fast and reliable
+- Performance is consistent across multiple runs
+- Server remains responsive throughout the test

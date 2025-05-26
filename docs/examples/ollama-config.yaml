@@ -1,0 +1,40 @@
+# Ollama Configuration for smolval
+# Local LLM setup for development without API costs
+
+mcp_servers:
+  # Local filesystem server
+  - name: "filesystem"
+    command: ["npx", "@modelcontextprotocol/server-filesystem", "."]
+    env: {}
+
+  # Web fetching capability
+  - name: "fetch"
+    command: ["uvx", "mcp-server-fetch"]
+    env:
+      USER_AGENT: "smolval-ollama"
+
+llm:
+  # Use local Ollama with a small, fast model
+  provider: "ollama"
+  model: "gemma2:2b"
+  base_url: "http://localhost:11434"
+  temperature: 0.1
+  # No API key required for local Ollama
+
+evaluation:
+  # Adjust settings for local model capabilities
+  timeout_seconds: 120
+  max_iterations: 15
+  output_format: "markdown"
+  results_dir: "ollama-results"
+  
+  # Verbose logging to monitor local model performance
+  log_level: "INFO"
+  include_timestamps: true
+  include_performance_metrics: true
+
+# Note: Requires Ollama running locally with the model downloaded
+# Setup commands:
+#   curl -fsSL https://ollama.ai/install.sh | sh
+#   ollama serve
+#   ollama pull gemma2:2b

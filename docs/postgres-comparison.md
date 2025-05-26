@@ -1,6 +1,8 @@
 # PostgreSQL MCP Server Comparison
 
-This directory contains configuration and test files for comparing PostgreSQL MCP servers.
+This document provides guidance for comparing PostgreSQL MCP servers using smolval.
+
+> **Note**: PostgreSQL examples and test data have been moved to [`docs/examples/postgres/`](examples/postgres/) for better organization.
 
 ## Setup
 
@@ -12,7 +14,7 @@ First, ensure you have PostgreSQL running locally on the default port (5432) and
 createdb smolval-test
 
 # Load test data
-psql smolval-test < setup-postgres-testdata.sql
+psql smolval-test < docs/examples/postgres/setup-postgres-testdata.sql
 ```
 
 ### 2. Verify Docker Images
@@ -33,7 +35,7 @@ docker pull mcp/postgresv2  # Assuming this exists
 Compare both servers against the same prompt:
 
 ```bash
-uv run python -m smolval.cli compare --baseline postgres --test postgresv2 prompts/postgres-comparison.txt -c config/postgres-comparison.yaml --format markdown
+uv run python -m smolval.cli compare --baseline postgres --test postgresv2 docs/examples/postgres/postgres-comparison.txt -c docs/examples/postgres/postgres-comparison.yaml --format markdown
 ```
 
 ### Individual Server Testing
@@ -41,17 +43,17 @@ Test each server separately:
 
 ```bash
 # Test PostgreSQL v1
-uv run python -m smolval.cli eval prompts/postgres-comparison.txt -c config/postgres-v1-only.yaml
+uv run python -m smolval.cli eval docs/examples/postgres/postgres-comparison.txt -c docs/examples/postgres/postgres-v1-only.yaml
 
 # Test PostgreSQL v2
-uv run python -m smolval.cli eval prompts/postgres-comparison.txt -c config/postgres-v2-only.yaml
+uv run python -m smolval.cli eval docs/examples/postgres/postgres-comparison.txt -c docs/examples/postgres/postgres-v2-only.yaml
 ```
 
 ### HTML Reports
 For better visualization, use HTML format:
 
 ```bash
-uv run python -m smolval.cli compare --baseline postgres --test postgresv2 prompts/postgres-comparison.txt -c config/postgres-comparison.yaml --format html
+uv run python -m smolval.cli compare --baseline postgres --test postgresv2 docs/examples/postgres/postgres-comparison.txt -c docs/examples/postgres/postgres-comparison.yaml --format html
 ```
 
 ## Test Data Overview
@@ -98,9 +100,9 @@ The setup script creates a comprehensive e-commerce database with:
 
 ## Configuration Files
 
-- `config/postgres-comparison.yaml` - Both servers for comparison
-- `config/postgres-v1-only.yaml` - Only the original postgres server
-- `config/postgres-v2-only.yaml` - Only the postgresv2 server
+- `docs/examples/postgres/postgres-comparison.yaml` - Both servers for comparison
+- `docs/examples/postgres/postgres-v1-only.yaml` - Only the original postgres server
+- `docs/examples/postgres/postgres-v2-only.yaml` - Only the postgresv2 server
 
 ## Expected Results
 
@@ -133,3 +135,7 @@ Comparison results will be generated in multiple formats:
 - `results/[timestamp]/comparison_postgres-comparison.html` - Interactive HTML report
 
 The HTML report provides the best visualization with collapsible sections, performance metrics, and side-by-side comparisons.
+
+## See Also
+
+For detailed PostgreSQL testing examples, configuration files, and setup instructions, see the comprehensive guide at [`docs/examples/postgres/`](examples/postgres/).

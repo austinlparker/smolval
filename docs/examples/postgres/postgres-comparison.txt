@@ -1,0 +1,59 @@
+You are testing READ-ONLY PostgreSQL MCP server functionality. These servers are designed for data analysis and querying only, not data modification. Please perform the following comprehensive read-only database operations:
+
+1. **Schema Discovery & Introspection**:
+   - List all available tables in the database
+   - Get the schema/structure for any existing tables
+   - List all available columns and their data types
+   - Discover indexes, constraints, and relationships if possible
+   - Check what database version and capabilities are available
+
+2. **Basic Query Operations** (if tables exist):
+   - Query all records from available tables (limit results to avoid overwhelming output)
+   - Count total records in each table
+   - Get distinct values from categorical columns
+   - Show sample data from each table
+
+3. **Advanced Read-Only Queries** (if data exists):
+   - Group data by categories and show counts
+   - Calculate aggregations (COUNT, SUM, AVG, MIN, MAX)
+   - Use WHERE clauses to filter data
+   - Join multiple tables if relationships exist
+   - Search for patterns using LIKE or ILIKE
+   - Order results by different columns
+
+4. **Query Complexity Testing**:
+   - Test subqueries and CTEs (Common Table Expressions)
+   - Try window functions if supported
+   - Test CASE statements and conditional logic
+   - Try complex WHERE conditions with AND/OR
+   - Test date/time functions and formatting
+
+5. **Error Handling & Edge Cases**:
+   - Try to query a non-existent table
+   - Try malformed SQL syntax
+   - Test queries with invalid column names
+   - Try to run write operations (INSERT/UPDATE/DELETE) - these should fail
+   - Test connection limits and timeout behavior
+
+6. **Performance & Capabilities**:
+   - Test query execution on larger result sets
+   - Check available PostgreSQL functions and extensions
+   - Test different data types (text, numeric, date, boolean, JSON)
+   - Examine connection information and server metadata
+   - Check what SQL features are supported vs restricted
+
+**Expected Behavior**: 
+- All SELECT queries should work
+- Schema introspection should be available
+- Any write operations (INSERT, UPDATE, DELETE, CREATE, DROP) should be rejected
+- Error messages should be clear and helpful
+
+Please execute these operations systematically and report on:
+- Which read operations succeed/fail
+- Differences in query syntax support between servers
+- Quality and detail of schema information provided
+- Error messages and handling for both valid and invalid queries
+- Performance characteristics for complex queries
+- Overall usability for data analysis tasks
+
+Goal: Provide a comprehensive comparison of read-only PostgreSQL MCP server capabilities for data analysis and querying.
