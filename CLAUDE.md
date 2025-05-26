@@ -87,7 +87,22 @@ uv run isort src/ tests/
 
 # Linting
 uv run ruff check src/ tests/
+
+# MANDATORY: Pre-commit quality checks (run before every commit)
+uv run black src/ tests/ && uv run isort src/ tests/ && uv run ruff check src/ tests/ && uv run mypy src/
 ```
+
+### Pre-Commit Workflow
+**IMPORTANT**: Always run the complete quality check pipeline before committing:
+
+1. **Format code**: `uv run black src/ tests/`
+2. **Sort imports**: `uv run isort src/ tests/`
+3. **Check linting**: `uv run ruff check src/ tests/`
+4. **Type check**: `uv run mypy src/`
+5. **Run tests**: `uv run pytest`
+6. **Then commit and push**
+
+This ensures consistent code quality and prevents formatting issues in commits.
 
 ## Core Architecture
 

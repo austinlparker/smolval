@@ -44,7 +44,7 @@ jobs:
     
     - name: Check dependencies for vulnerabilities
       run: |
-        uv run safety check
+        uv run safety scan
     
     - name: Generate complexity report
       run: |
