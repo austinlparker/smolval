@@ -3,7 +3,6 @@
 import json
 from typing import Any
 
-import pprint
 
 import llm
 from pydantic import BaseModel
@@ -104,7 +103,9 @@ class LLMClient:
             # Use the conversation API but with complete context each time
             response = self.conversation.prompt(
                 conversation_text,
-                system=system_prompt
+                system=system_prompt,
+                temperature=self.config.temperature,
+                max_tokens=self.config.max_tokens,
             )
         except Exception as e:
             raise RuntimeError(f"LLM API call failed: {e}")

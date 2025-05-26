@@ -112,7 +112,7 @@ The `MCPClientManager` uses proper async context managers with `AsyncExitStack` 
 - Discovers tools from all connected servers and presents unified interface to the agent
 
 ### Configuration System
-- **YAML-based**: Environment variable expansion with `${VAR}` and `${VAR:-default}` syntax
+- **YAML-based**: Environment variable expansion with `${VAR}` and `${VAR:-default}` syntax (loads `.env` via python-dotenv)
 - **Default Config**: `config/no-api-keys.yaml` with filesystem, fetch, sqlite servers (Claude 4 Sonnet)
 - **Alternative Configs**: `config/openai-gpt4.yaml` (GPT-4o Mini), `config/filesystem-only.yaml` (Claude 4 Sonnet, filesystem only), `config/ollama.yaml` (Ollama with gemma3:1b-it-qat)
 - **Required Environment**: `ANTHROPIC_API_KEY` or `OPENAI_API_KEY` (not required for Ollama)

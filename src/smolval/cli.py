@@ -5,6 +5,7 @@ import json
 import logging
 import sys
 import time
+import os
 from pathlib import Path
 from typing import Any
 
@@ -15,6 +16,20 @@ from .config import Config
 from .llm_client import LLMClient
 from .mcp_client import MCPClientManager
 from .output_manager import OutputManager
+
+
+async def _connect_mcp_servers_silently(mcp_manager: MCPClientManager, server_configs: list) -> None:
+    """Connect to MCP servers while suppressing OS-level stderr noise."""
+    stderr_fd = os.dup(2)
+    devnull = os.open(os.devnull, os.O_WRONLY)
+    os.dup2(devnull, 2)
+    try:
+        for server_config in server_configs:
+            await mcp_manager.connect(server_config)
+    finally:
+        os.dup2(stderr_fd, 2)
+        os.close(stderr_fd)
+        os.close(devnull)
 
 
 def _show_banner() -> None:
@@ -100,21 +115,7 @@ async def _run_eval(prompt_file: str, config_path: str, output_dir: str, run_nam
 
         # Connect to MCP servers (suppress server startup noise)
         click.echo("Connecting to MCP servers...")
-        
-        # Temporarily redirect OS-level stderr to suppress server output
-        import os
-        stderr_fd = os.dup(2)  # Save original stderr
-        devnull = os.open(os.devnull, os.O_WRONLY)
-        os.dup2(devnull, 2)  # Redirect stderr to /dev/null
-        
-        try:
-            for server_config in config.mcp_servers:
-                await mcp_manager.connect(server_config)
-        finally:
-            # Restore original stderr
-            os.dup2(stderr_fd, 2)
-            os.close(stderr_fd)
-            os.close(devnull)
+        await _connect_mcp_servers_silently(mcp_manager, config.mcp_servers)
 
         # Initialize agent
         click.echo("Initializing agent...")
@@ -220,39 +221,6 @@ async def _run_eval(prompt_file: str, config_path: str, output_dir: str, run_nam
                 logger.warning("Error during MCP cleanup: %s", cleanup_error)
 
 
-def _pretty_print_result(result_data: dict[str, Any]) -> None:
-    """Pretty print evaluation results to console."""
-    result = result_data["result"]
-
-    click.echo("\n" + "="*60)
-    click.echo("EVALUATION RESULTS")
-    click.echo("="*60)
-
-    click.echo(f"Success: {'✅' if result['success'] else '❌'}")
-    click.echo(f"Iterations: {result['total_iterations']}")
-    click.echo(f"Execution Time: {result['execution_time_seconds']:.2f}s")
-    
-    if result.get('token_usage'):
-        token_usage = result['token_usage']
-        click.echo(f"Token Usage: {token_usage.get('total_tokens', 0)} total ({token_usage.get('input_tokens', 0)} input + {token_usage.get('output_tokens', 0)} output)")
-
-    if result['error']:
-        click.echo(f"Error: {result['error']}")
-
-    click.echo(f"\nFinal Answer:\n{result['final_answer']}")
-
-    if result['steps']:
-        click.echo("\nStep-by-step execution:")
-        for i, step in enumerate(result['steps'], 1):
-            click.echo(f"\n--- Step {i} (Iteration {step['iteration']}) ---")
-            click.echo(f"Thought: {step['thought']}")
-            if step['action']:
-                click.echo(f"Action: {step['action']}")
-                click.echo(f"Action Input: {json.dumps(step['action_input'], indent=2)}")
-            if step['observation']:
-                click.echo(f"Observation: {step['observation']}")
-
-    click.echo("\n" + "="*60)
 
 
 @main.command()
@@ -310,21 +278,7 @@ async def _run_batch(prompts_dir: str, config_path: str, output_dir: str, run_na
 
         # Connect to MCP servers (suppress server startup noise)
         click.echo("Connecting to MCP servers...")
-        
-        # Temporarily redirect OS-level stderr to suppress server output
-        import os
-        stderr_fd = os.dup(2)  # Save original stderr
-        devnull = os.open(os.devnull, os.O_WRONLY)
-        os.dup2(devnull, 2)  # Redirect stderr to /dev/null
-        
-        try:
-            for server_config in config.mcp_servers:
-                await mcp_manager.connect(server_config)
-        finally:
-            # Restore original stderr
-            os.dup2(stderr_fd, 2)
-            os.close(stderr_fd)
-            os.close(devnull)
+        await _connect_mcp_servers_silently(mcp_manager, config.mcp_servers)
 
         # Initialize agent
         agent = Agent(config, llm_client, mcp_manager)

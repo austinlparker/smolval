@@ -13,7 +13,7 @@ mcp_servers:
       ]
     env:
       {
-        HONEYCOMB_API_KEY: "hcamk_01jw4y1bt6e5p9sncpr820zgnn:p0mn6nyf92adnvfpnj4amyxw59p4www1",
+        HONEYCOMB_API_KEY: "${HONEYCOMB_API_KEY}",
       }
 
 llm:

@@ -7,6 +7,13 @@ from typing import Any
 
 import yaml
 from pydantic import BaseModel, Field, field_validator
+try:
+    from dotenv import load_dotenv
+except ImportError:
+    load_dotenv = lambda *args, **kwargs: None
+
+# Load environment variables from a .env file if present
+load_dotenv()
 
 
 class MCPServerConfig(BaseModel):

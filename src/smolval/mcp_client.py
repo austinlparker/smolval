@@ -212,6 +212,11 @@ class MCPClientManager:
             logger.debug("Closing exit stack with %d contexts", len(self.clients))
             await self.exit_stack.aclose()
             logger.debug("Exit stack closed successfully")
+        except ExceptionGroup as eg:
+            if str(eg).startswith("unhandled errors in a TaskGroup"):
+                logger.debug("Ignoring TaskGroupError during exit_stack cleanup: %s", eg)
+            else:
+                logger.warning("Error closing exit stack: %s", eg)
         except Exception as e:
             logger.warning("Error closing exit stack: %s", e)
 
