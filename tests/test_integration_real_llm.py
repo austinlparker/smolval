@@ -29,7 +29,7 @@ def real_anthropic_config() -> LLMConfig:
     
     return LLMConfig(
         provider="anthropic",
-        model="claude-3-haiku-20240307",  # Use cheaper/faster model for testing
+        model="anthropic/claude-3-haiku-20240307",  # Use full model name
         api_key=api_key,
         temperature=0.1,
         max_tokens=500  # Keep costs low
@@ -119,7 +119,8 @@ class TestRealLLMIntegration:
         config = Config(
             mcp_servers=[],  # No MCP servers for this test
             llm=real_openai_config,
-            evaluation=EvaluationConfig(max_iterations=2, timeout_seconds=15)
+            evaluation=EvaluationConfig(max_iterations=2, timeout_seconds=15),
+            allow_empty_servers=True
         )
         
         llm_client = LLMClient(config.llm)
@@ -154,7 +155,8 @@ class TestRealLLMIntegration:
         config = Config(
             mcp_servers=[],
             llm=bad_config,
-            evaluation=EvaluationConfig(max_iterations=1, timeout_seconds=10)
+            evaluation=EvaluationConfig(max_iterations=1, timeout_seconds=10),
+            allow_empty_servers=True
         )
         
         llm_client = LLMClient(config.llm)

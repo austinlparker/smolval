@@ -1,0 +1,101 @@
+name: Integration Tests
+
+on:
+  push:
+    branches: [ master, main ]
+  pull_request:
+    branches: [ master, main ]
+  schedule:
+    # Run integration tests daily at 2 AM UTC
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+    # Allow manual triggering
+
+jobs:
+  integration-tests:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Install uv
+      uses: astral-sh/setup-uv@v4
+      with:
+        version: "latest"
+    
+    - name: Set up Python 3.12
+      run: uv python install 3.12
+    
+    - name: Install dependencies
+      run: |
+        uv sync --all-extras
+    
+    - name: Install Node.js for MCP servers
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+    
+    - name: Install MCP servers
+      run: |
+        npm install -g @modelcontextprotocol/server-filesystem
+        uv tool install mcp-server-fetch
+    
+    - name: Set up Docker for SQLite MCP server
+      uses: docker/setup-buildx-action@v3
+    
+    - name: Pull SQLite MCP server image
+      run: |
+        docker pull mcp/sqlite
+    
+    - name: Start Ollama (for local LLM testing)
+      run: |
+        # Install Ollama
+        curl -fsSL https://ollama.ai/install.sh | sh
+        # Start Ollama in background
+        ollama serve &
+        sleep 10
+        # Pull a small model for testing
+        ollama pull gemma2:2b
+    
+    - name: Run integration tests with real APIs
+      run: |
+        uv run pytest tests/test_integration_real_llm.py -v --tb=short
+      env:
+        ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        HONEYCOMB_API_KEY: ${{ secrets.HONEYCOMB_API_KEY }}
+    
+    - name: Run Ollama integration tests
+      run: |
+        uv run pytest tests/test_integration_ollama.py -v --tb=short -m integration
+      env:
+        OLLAMA_BASE_URL: http://localhost:11434
+    
+    - name: Test CLI with real evaluation
+      run: |
+        # Test simple evaluation with Anthropic
+        uv run python -m smolval.cli eval prompts/example.txt -c config/example-anthropic.yaml --format json -o test_results.json
+        # Test with OpenAI
+        uv run python -m smolval.cli eval prompts/example.txt -c config/example-openai.yaml --format markdown -o test_results.md
+        # Test comparison
+        uv run python -m smolval.cli compare --baseline filesystem --test filesystem prompts/example.txt -c config/example-anthropic.yaml --format html -o comparison.html
+      env:
+        ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+    
+    - name: Upload test results
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: integration-test-results
+        path: |
+          test_results.json
+          test_results.md
+          comparison.html
+    
+    - name: Notify on failure
+      if: failure()
+      run: |
+        echo "Integration tests failed. Check the logs for details."
+        echo "This could indicate API changes or service issues."

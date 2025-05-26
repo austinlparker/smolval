@@ -1,0 +1,5 @@
+Please analyze the performance of the application in the Gremlin environment in
+Honeycomb.
+
+I'd like to know what the slowest requests are, and if there are any errors that
+could be contributing to poor performance. Focus on the past 24 hours.

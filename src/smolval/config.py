@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Any
 
 import yaml
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 try:
     from dotenv import load_dotenv
 except ImportError:
@@ -107,14 +107,14 @@ class Config(BaseModel):
     mcp_servers: list[MCPServerConfig] = Field(..., description="MCP servers to connect to")
     llm: LLMConfig = Field(..., description="LLM configuration")
     evaluation: EvaluationConfig = Field(default_factory=EvaluationConfig, description="Evaluation settings")
+    allow_empty_servers: bool = Field(default=False, description="Allow empty MCP server list (for testing)")
 
-    @field_validator('mcp_servers')
-    @classmethod
-    def at_least_one_server(cls, v: list[MCPServerConfig]) -> list[MCPServerConfig]:
-        """Validate at least one MCP server is configured."""
-        if not v:
+    @model_validator(mode='after')
+    def validate_mcp_servers(self) -> 'Config':
+        """Validate at least one MCP server is configured (unless allow_empty_servers is True)."""
+        if not self.mcp_servers and not self.allow_empty_servers:
             raise ValueError("At least one MCP server must be configured")
-        return v
+        return self
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "Config":

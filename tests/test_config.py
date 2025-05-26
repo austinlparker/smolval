@@ -30,7 +30,7 @@ class TestConfig:
         
         try:
             config = Config.from_yaml(config_path)
-            assert config.llm.model == "claude-sonnet-4-20250514"
+            assert config.llm.model == "anthropic/claude-3-haiku-20240307"
         finally:
             config_path.unlink()
 

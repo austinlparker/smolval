@@ -18,18 +18,23 @@ from .mcp_client import MCPClientManager
 from .output_manager import OutputManager
 
 
-async def _connect_mcp_servers_silently(mcp_manager: MCPClientManager, server_configs: list) -> None:
+async def _connect_mcp_servers_silently(mcp_manager: MCPClientManager, server_configs: list, debug: bool = False) -> None:
     """Connect to MCP servers while suppressing OS-level stderr noise."""
-    stderr_fd = os.dup(2)
-    devnull = os.open(os.devnull, os.O_WRONLY)
-    os.dup2(devnull, 2)
-    try:
+    if debug:
+        # Don't suppress stderr in debug mode
         for server_config in server_configs:
-            await mcp_manager.connect(server_config)
-    finally:
-        os.dup2(stderr_fd, 2)
-        os.close(stderr_fd)
-        os.close(devnull)
+            await mcp_manager.connect(server_config, debug=True)
+    else:
+        stderr_fd = os.dup(2)
+        devnull = os.open(os.devnull, os.O_WRONLY)
+        os.dup2(devnull, 2)
+        try:
+            for server_config in server_configs:
+                await mcp_manager.connect(server_config, debug=False)
+        finally:
+            os.dup2(stderr_fd, 2)
+            os.close(stderr_fd)
+            os.close(devnull)
 
 
 def _show_banner() -> None:
@@ -55,9 +60,10 @@ def _show_banner() -> None:
 @click.pass_context
 def main(ctx: click.Context, verbose: bool, debug: bool, no_banner: bool) -> None:
     """smolval: A lightweight MCP server evaluation agent."""
-    # Store banner preference in context for commands to use
+    # Store flags in context for commands to use
     ctx.ensure_object(dict)
     ctx.obj['no_banner'] = no_banner
+    ctx.obj['debug'] = debug
     
     # Configure logging
     if debug:
@@ -87,10 +93,11 @@ def eval(ctx: click.Context, prompt_file: str, config: str, output_dir: str, run
     if not ctx.obj.get('no_banner', False):
         _show_banner()
     
-    asyncio.run(_run_eval(prompt_file, config, output_dir, run_name))
+    debug = ctx.obj.get('debug', False)
+    asyncio.run(_run_eval(prompt_file, config, output_dir, run_name, debug))
 
 
-async def _run_eval(prompt_file: str, config_path: str, output_dir: str, run_name: str) -> None:
+async def _run_eval(prompt_file: str, config_path: str, output_dir: str, run_name: str, debug: bool = False) -> None:
     """Run evaluation asynchronously."""
     logger = logging.getLogger(__name__)
     mcp_manager = None
@@ -115,7 +122,7 @@ async def _run_eval(prompt_file: str, config_path: str, output_dir: str, run_nam
 
         # Connect to MCP servers (suppress server startup noise)
         click.echo("Connecting to MCP servers...")
-        await _connect_mcp_servers_silently(mcp_manager, config.mcp_servers)
+        await _connect_mcp_servers_silently(mcp_manager, config.mcp_servers, debug)
 
         # Initialize agent
         click.echo("Initializing agent...")
@@ -236,11 +243,12 @@ def batch(ctx: click.Context, prompts_dir: str, config: str, output_dir: str, ru
     # Show banner unless disabled
     if not ctx.obj.get('no_banner', False):
         _show_banner()
-        
-    asyncio.run(_run_batch(prompts_dir, config, output_dir, run_name, servers))
+    
+    debug = ctx.obj.get('debug', False)
+    asyncio.run(_run_batch(prompts_dir, config, output_dir, run_name, servers, debug))
 
 
-async def _run_batch(prompts_dir: str, config_path: str, output_dir: str, run_name: str, servers_filter: str) -> None:
+async def _run_batch(prompts_dir: str, config_path: str, output_dir: str, run_name: str, servers_filter: str, debug: bool = False) -> None:
     """Run batch evaluation asynchronously."""
     mcp_manager = None
     
@@ -278,7 +286,7 @@ async def _run_batch(prompts_dir: str, config_path: str, output_dir: str, run_na
 
         # Connect to MCP servers (suppress server startup noise)
         click.echo("Connecting to MCP servers...")
-        await _connect_mcp_servers_silently(mcp_manager, config.mcp_servers)
+        await _connect_mcp_servers_silently(mcp_manager, config.mcp_servers, debug)
 
         # Initialize agent
         agent = Agent(config, llm_client, mcp_manager)
@@ -492,7 +500,11 @@ async def _run_compare(baseline: str, test: str, prompts_dir: str, config_path: 
                             "iterations": result.total_iterations,
                             "execution_time": result.execution_time_seconds,
                             "error": result.error,
-                            "steps": len(result.steps)
+                            "steps": len(result.steps),
+                            "failed_tool_calls": result.failed_tool_calls,
+                            "token_usage": result.token_usage,
+                            "detailed_steps": [step.model_dump() for step in result.steps],
+                            "llm_responses": result.llm_responses
                         })
 
                         status = "✅" if result.success else "❌"
@@ -508,7 +520,11 @@ async def _run_compare(baseline: str, test: str, prompts_dir: str, config_path: 
                             "iterations": 0,
                             "execution_time": 0,
                             "error": str(e),
-                            "steps": 0
+                            "steps": 0,
+                            "failed_tool_calls": 0,
+                            "token_usage": None,
+                            "detailed_steps": [],
+                            "llm_responses": []
                         })
 
                 comparison_results.append({
@@ -589,6 +605,22 @@ def _analyze_comparison(baseline: str, test: str, baseline_results: list, test_r
     baseline_avg_iterations = sum(r["iterations"] for r in baseline_results if r["success"]) / max(baseline_success, 1)
     test_avg_iterations = sum(r["iterations"] for r in test_results if r["success"]) / max(test_success, 1)
 
+    # Calculate failed tool calls
+    baseline_failed_tools = sum(r.get("failed_tool_calls", 0) for r in baseline_results)
+    test_failed_tools = sum(r.get("failed_tool_calls", 0) for r in test_results)
+
+    # Calculate token usage
+    baseline_total_tokens = 0
+    test_total_tokens = 0
+    
+    for r in baseline_results:
+        if r.get("token_usage"):
+            baseline_total_tokens += r["token_usage"].get("total_tokens", 0)
+    
+    for r in test_results:
+        if r.get("token_usage"):
+            test_total_tokens += r["token_usage"].get("total_tokens", 0)
+
     return {
         "total_prompts": total,
         "success_rates": {
@@ -607,10 +639,20 @@ def _analyze_comparison(baseline: str, test: str, baseline_results: list, test_r
             baseline: baseline_avg_iterations,
             test: test_avg_iterations
         },
+        "total_failed_tool_calls": {
+            baseline: baseline_failed_tools,
+            test: test_failed_tools
+        },
+        "total_token_usage": {
+            baseline: baseline_total_tokens,
+            test: test_total_tokens
+        },
         "winner": {
             "success_rate": baseline if baseline_success >= test_success else test,
             "speed": baseline if baseline_avg_time <= test_avg_time else test,
-            "efficiency": baseline if baseline_avg_iterations <= test_avg_iterations else test
+            "efficiency": baseline if baseline_avg_iterations <= test_avg_iterations else test,
+            "reliability": baseline if baseline_failed_tools <= test_failed_tools else test,
+            "token_efficiency": baseline if baseline_total_tokens <= test_total_tokens else test
         }
     }
 
@@ -620,40 +662,60 @@ def _print_comparison_summary(analysis: dict) -> None:
     baseline = [k for k in analysis["success_rates"].keys()][0]
     test = [k for k in analysis["success_rates"].keys()][1]
 
-    click.echo(f"\n{'='*60}")
-    click.echo("COMPARISON SUMMARY")
-    click.echo(f"{'='*60}")
+    click.echo(f"\n{'='*70}")
+    click.echo("🏆 COMPARISON SUMMARY")
+    click.echo(f"{'='*70}")
 
-    click.echo(f"Total prompts: {analysis['total_prompts']}")
+    click.echo(f"📊 Total prompts: {analysis['total_prompts']}")
     click.echo()
 
     # Success rates
-    click.echo("SUCCESS RATES:")
+    click.echo("✅ SUCCESS RATES:")
     baseline_rate = analysis["success_rates"][baseline] * 100
     test_rate = analysis["success_rates"][test] * 100
     click.echo(f"  {baseline}: {analysis['success_counts'][baseline]}/{analysis['total_prompts']} ({baseline_rate:.1f}%)")
     click.echo(f"  {test}: {analysis['success_counts'][test]}/{analysis['total_prompts']} ({test_rate:.1f}%)")
-    click.echo(f"  Winner: {analysis['winner']['success_rate']} 🏆")
+    click.echo(f"  🏆 Winner: {analysis['winner']['success_rate']}")
     click.echo()
 
     # Speed
-    click.echo("AVERAGE EXECUTION TIME:")
+    click.echo("⚡ AVERAGE EXECUTION TIME:")
     baseline_time = analysis["average_execution_times"][baseline]
     test_time = analysis["average_execution_times"][test]
     click.echo(f"  {baseline}: {baseline_time:.2f}s")
     click.echo(f"  {test}: {test_time:.2f}s")
-    click.echo(f"  Winner: {analysis['winner']['speed']} 🏆")
+    click.echo(f"  🏆 Winner: {analysis['winner']['speed']}")
     click.echo()
 
     # Efficiency
-    click.echo("AVERAGE ITERATIONS:")
+    click.echo("🎯 AVERAGE ITERATIONS:")
     baseline_iter = analysis["average_iterations"][baseline]
     test_iter = analysis["average_iterations"][test]
     click.echo(f"  {baseline}: {baseline_iter:.1f}")
     click.echo(f"  {test}: {test_iter:.1f}")
-    click.echo(f"  Winner: {analysis['winner']['efficiency']} 🏆")
+    click.echo(f"  🏆 Winner: {analysis['winner']['efficiency']}")
+    click.echo()
 
-    click.echo(f"\n{'='*60}")
+    # Reliability (Failed Tool Calls)
+    click.echo("🔒 RELIABILITY (Failed Tool Calls):")
+    baseline_failed = analysis["total_failed_tool_calls"][baseline]
+    test_failed = analysis["total_failed_tool_calls"][test]
+    click.echo(f"  {baseline}: {baseline_failed}")
+    click.echo(f"  {test}: {test_failed}")
+    click.echo(f"  🏆 Winner: {analysis['winner']['reliability']}")
+    click.echo()
+
+    # Token efficiency
+    click.echo("💎 TOKEN EFFICIENCY:")
+    baseline_tokens = analysis["total_token_usage"][baseline]
+    test_tokens = analysis["total_token_usage"][test]
+    if baseline_tokens > 0 or test_tokens > 0:
+        click.echo(f"  {baseline}: {baseline_tokens:,} tokens" if baseline_tokens else f"  {baseline}: N/A")
+        click.echo(f"  {test}: {test_tokens:,} tokens" if test_tokens else f"  {test}: N/A")
+        click.echo(f"  🏆 Winner: {analysis['winner']['token_efficiency']}")
+    else:
+        click.echo("  No token usage data available")
+    click.echo(f"{'='*70}")
 
 
 if __name__ == '__main__':

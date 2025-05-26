@@ -57,10 +57,12 @@ class MCPClientManager:
         self.tools: list[MCPTool] = []
         self.exit_stack = AsyncExitStack()
 
-    async def connect(self, config: MCPServerConfig) -> None:
+    async def connect(self, config: MCPServerConfig, debug: bool = False) -> None:
         """Connect to an MCP server."""
         try:
             logger.debug("Connecting to MCP server: %s", config.name)
+            logger.debug("Command: %s", config.command)
+            
             # Create server parameters for the MCP stdio client
             # The first element is the command, the rest are arguments
             command = config.command[0]
@@ -71,40 +73,66 @@ class MCPClientManager:
                 command = shutil.which("npx") or "npx"
                 logger.debug("Using npx command: %s", command)
 
+            logger.debug("Full command with args: %s %s", command, ' '.join(args))
+
             # Create environment with additional variables to suppress output
             env_vars = {**os.environ, **config.env} if config.env else os.environ.copy()
             
-            # Add variables to suppress verbose output for known servers
-            env_vars.update({
-                'QUIET': '1',
-                'SILENT': '1', 
-                'NO_DEBUG': '1',
-                'MCP_QUIET': '1'
-            })
+            # Add variables to suppress verbose output for known servers (unless debug mode)
+            if not debug:
+                env_vars.update({
+                    'QUIET': '1',
+                    'SILENT': '1', 
+                    'NO_DEBUG': '1',
+                    'MCP_QUIET': '1'
+                })
+                logger.debug("Added quiet environment variables")
+            else:
+                logger.debug("Debug mode: not adding quiet environment variables")
             
             # For some servers, we need to suppress both stdout and stderr
             # But MCP protocol uses stdio, so we'll try stderr first
+            stderr_setting = None if debug else subprocess.DEVNULL
             server_params = StdioServerParameters(
                 command=command,
                 args=args,
                 env=env_vars,
-                stderr=subprocess.DEVNULL
+                stderr=stderr_setting
             )
 
-            # Suppress stderr during MCP connection to hide server startup messages
-            stderr_capture = StringIO()
-            
-            # Use proper async context manager pattern from official example
-            with redirect_stderr(stderr_capture):
+            logger.debug("Created server parameters for %s", config.name)
+
+            # Suppress stderr during MCP connection to hide server startup messages (unless debug)
+            if debug:
+                logger.debug("Debug mode: not suppressing stderr")
                 stdio_transport = await self.exit_stack.enter_async_context(
                     stdio_client(server_params)
                 )
                 read, write = stdio_transport
 
+                logger.debug("Got stdio transport for %s", config.name)
+
                 session = await self.exit_stack.enter_async_context(
                     ClientSession(read, write)
                 )
+                logger.debug("Created client session for %s", config.name)
+                
                 await session.initialize()
+                logger.debug("Initialized session for %s", config.name)
+            else:
+                stderr_capture = StringIO()
+                
+                # Use proper async context manager pattern from official example
+                with redirect_stderr(stderr_capture):
+                    stdio_transport = await self.exit_stack.enter_async_context(
+                        stdio_client(server_params)
+                    )
+                    read, write = stdio_transport
+
+                    session = await self.exit_stack.enter_async_context(
+                        ClientSession(read, write)
+                    )
+                    await session.initialize()
 
             # Store the session for tool execution
             self.clients[config.name] = {
@@ -180,7 +208,8 @@ class MCPClientManager:
             )
 
         except Exception as e:
-            logger.error("Tool execution failed for %s on server %s: %s", tool_name, tool.server_name, e)
+            # Log as debug instead of error since tool failures are often expected in evaluations
+            logger.debug("Tool execution failed for %s on server %s: %s", tool_name, tool.server_name, e)
             return MCPToolResult(
                 tool_name=tool_name,
                 server_name=tool.server_name,

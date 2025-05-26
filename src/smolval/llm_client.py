@@ -101,12 +101,20 @@ class LLMClient:
         
         try:
             # Use the conversation API but with complete context each time
-            response = self.conversation.prompt(
-                conversation_text,
-                system=system_prompt,
-                temperature=self.config.temperature,
-                max_tokens=self.config.max_tokens,
-            )
+            # Note: Ollama models don't support max_tokens parameter
+            if self.config.provider == "ollama":
+                response = self.conversation.prompt(
+                    conversation_text,
+                    system=system_prompt,
+                    temperature=self.config.temperature,
+                )
+            else:
+                response = self.conversation.prompt(
+                    conversation_text,
+                    system=system_prompt,
+                    temperature=self.config.temperature,
+                    max_tokens=self.config.max_tokens,
+                )
         except Exception as e:
             raise RuntimeError(f"LLM API call failed: {e}")
 

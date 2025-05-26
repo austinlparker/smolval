@@ -116,7 +116,8 @@ class Agent:
                                 tool_name, _, tool_id = self._extract_tool_call_info(tool_call)
                                 self._add_tool_result(tool_id, step.observation or "")
                             except Exception as tool_error:
-                                logger.warning("Tool execution failed: %s", tool_error)
+                                # Log as debug instead of warning since tool failures are often expected
+                                logger.debug("Tool execution failed: %s", tool_error)
                                 failed_tool_calls += 1
                                 tool_name, action_input, tool_id = self._extract_tool_call_info(tool_call)
 
@@ -242,7 +243,8 @@ class Agent:
             # Format observation and determine if failed
             failed = bool(result.error)
             if result.error:
-                logger.warning("Tool %s failed: %s", tool_name, result.error)
+                # Log as debug instead of warning since tool failures are often expected in evaluations
+                logger.debug("Tool %s failed: %s", tool_name, result.error)
                 observation = f"Tool execution failed: {result.error}"
             else:
                 logger.debug("Tool %s executed successfully", tool_name)

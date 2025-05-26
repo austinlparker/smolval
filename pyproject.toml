@@ -51,6 +51,9 @@ dev-dependencies = [
     "ruff>=0.0.290",
     "requests>=2.31.0",
     "llm-ollama>=0.3.0",
+    "bandit>=1.7.0",
+    "safety>=3.0.0",
+    "radon>=6.0.0",
 ]
 
 [tool.pytest.ini_options]

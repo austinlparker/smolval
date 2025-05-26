@@ -43,7 +43,7 @@ def sample_config() -> dict:
         ],
         "llm": {
             "provider": "anthropic",
-            "model": "claude-sonnet-4-20250514",
+            "model": "anthropic/claude-3-haiku-20240307",
             "api_key": "test-api-key",
             "temperature": 0.1
         },

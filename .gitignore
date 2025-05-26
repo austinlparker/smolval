@@ -77,3 +77,5 @@ results/
 output/
 *.json
 *.csv
+
+report.md
