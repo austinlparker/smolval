@@ -28,7 +28,11 @@ uv run python -m smolval.cli eval prompts/simple_test.txt
 uv run python -m smolval.cli batch prompts/ -c config/custom.yaml -o results/ --format json
 
 # Compare servers
-uv run python -m smolval.cli compare --baseline filesystem --test memory prompts/ --format markdown
+uv run python -m smolval.cli compare --baseline filesystem --test fetch prompts/ --format markdown
+
+# Use Ollama for local testing (requires ollama running with gemma3:1b-it-qat model)
+# Features Gemma-specific function calling with tool_code blocks
+uv run python -m smolval.cli eval prompts/simple_test.txt -c config/ollama.yaml --format markdown
 ```
 
 #### Docker
@@ -51,7 +55,7 @@ docker run --rm \
   -e OPENAI_API_KEY \
   smolval eval prompts/simple_test.txt -c config/openai-gpt4.yaml --format markdown
 
-# Run without Docker socket (filesystem and memory servers only)
+# Run without Docker socket (filesystem and fetch servers only)
 docker run --rm \
   -e ANTHROPIC_API_KEY \
   smolval eval prompts/simple_test.txt -c config/filesystem-only.yaml --format markdown
@@ -59,7 +63,7 @@ docker run --rm \
 
 ### Testing
 ```bash
-# Run full test suite (41 tests)
+# Run full test suite 
 uv run pytest
 
 # Run with coverage
@@ -67,6 +71,9 @@ uv run pytest --cov=smolval
 
 # Run specific test file
 uv run pytest tests/test_agent.py
+
+# Run Ollama integration tests (requires Ollama running locally)
+uv run pytest tests/test_integration_ollama.py -m integration
 ```
 
 ### Code Quality
@@ -88,7 +95,7 @@ uv run ruff check src/ tests/
 1. **CLI** (`cli.py`) → **Config** (`config.py`) → **Agent** (`agent.py`) workflow
 2. **Agent** orchestrates **LLMClient** + **MCPClientManager** in ReAct loop
 3. **MCPClientManager** (`mcp_client.py`) discovers tools from multiple MCP servers, presents unified interface
-4. **LLMClient** (`llm_client.py`) provides unified interface for Anthropic Claude and OpenAI models
+4. **LLMClient** (`llm_client.py`) provides unified interface for Anthropic Claude, OpenAI, and Ollama models with Gemma-specific function calling
 5. **ResultsFormatter** (`results.py`) handles multi-format output with Jinja2 templating
 
 ### Key Design Patterns
@@ -106,15 +113,16 @@ The `MCPClientManager` uses proper async context managers with `AsyncExitStack` 
 
 ### Configuration System
 - **YAML-based**: Environment variable expansion with `${VAR}` and `${VAR:-default}` syntax
-- **Default Config**: `config/no-api-keys.yaml` with filesystem, memory, sqlite servers (Claude 4 Sonnet)
-- **Alternative Configs**: `config/openai-gpt4.yaml` (GPT-4o Mini), `config/filesystem-only.yaml` (Claude 4 Sonnet, filesystem only)
-- **Required Environment**: `ANTHROPIC_API_KEY` or `OPENAI_API_KEY`
+- **Default Config**: `config/no-api-keys.yaml` with filesystem, fetch, sqlite servers (Claude 4 Sonnet)
+- **Alternative Configs**: `config/openai-gpt4.yaml` (GPT-4o Mini), `config/filesystem-only.yaml` (Claude 4 Sonnet, filesystem only), `config/ollama.yaml` (Ollama with gemma3:1b-it-qat)
+- **Required Environment**: `ANTHROPIC_API_KEY` or `OPENAI_API_KEY` (not required for Ollama)
 - **LLM Library**: Uses `datasette llm` with automatic plugin loading for providers
 
 ### MCP Server Support
-- **NPM-based servers**: `@modelcontextprotocol/server-filesystem`, `@modelcontextprotocol/server-memory`
+- **NPM-based servers**: `@modelcontextprotocol/server-filesystem`
+- **Python-based servers**: `mcp-server-fetch` (web content retrieval via uvx)
 - **Docker-based servers**: `mcp/sqlite` (requires Docker socket access)
-- **Mixed deployment**: Can run both NPM and Docker-based servers simultaneously
+- **Mixed deployment**: Can run NPM, Python, and Docker-based servers simultaneously
 
 ## Important Implementation Details
 
@@ -129,10 +137,11 @@ The agent runs a ReAct loop with:
 Tool calls from LLM responses are processed as Pydantic `ToolCall` objects, then executed via the appropriate MCP server through `MCPClientManager.execute_tool()`.
 
 ### Testing Infrastructure
-- **Extensive Mocking**: Mock fixtures for LLM responses and MCP server interactions
+- **Real MCP Server Integration**: Tests use actual NPM and Python MCP servers
+- **Mock LLM Responses**: Predefined responses to avoid API costs in testing
 - **Async Testing**: Uses `pytest-asyncio` for async test functions
-- **Integration Tests**: Uses `pytest-docker` for containerized testing
-- **Coverage**: Comprehensive test coverage across all components
+- **Multi-Provider Testing**: Tests with Anthropic, OpenAI, and Ollama LLM providers
+- **Conditional Skipping**: Tests skip gracefully when dependencies aren't available
 
 ### Output Formats
 Results can be formatted as JSON, CSV, Markdown, or HTML using Jinja2 templates in the `templates/` directory.

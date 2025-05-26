@@ -48,6 +48,8 @@ dev-dependencies = [
     "isort>=5.12.0",
     "mypy>=1.5.0",
     "ruff>=0.0.290",
+    "requests>=2.31.0",
+    "llm-ollama>=0.3.0",
 ]
 
 [tool.pytest.ini_options]
@@ -56,6 +58,14 @@ addopts = "-ra -q --strict-markers --strict-config"
 testpaths = ["tests"]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
+markers = [
+    "integration: mark test as integration test (may be slow)",
+    "unit: mark test as unit test (fast)",
+    "requires_docker: mark test as requiring Docker",
+    "requires_npm: mark test as requiring NPM packages",
+    "requires_api_keys: mark test as requiring real API keys (costs money)",
+    "slow: mark test as slow running",
+]
 
 [tool.black]
 line-length = 88

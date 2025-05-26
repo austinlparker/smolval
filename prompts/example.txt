@@ -1,0 +1,8 @@
+Test the basic functionality of the MCP servers by performing these tasks:
+
+1. List the files in the current directory to understand the project structure
+2. If you find any interesting files (like README, documentation, or example files), read their contents
+3. Try to fetch content from a simple webpage (like https://example.com) to test the web fetching capability
+4. Summarize what you learned about the project and the capabilities of the MCP servers
+
+This evaluation will help verify that the MCP servers are working correctly and can handle file operations, web requests, and provide useful responses.

@@ -128,8 +128,10 @@ class TestAgent:
         # Mock LLM response with no tool calls
         mock_response = Mock()
         mock_response.content = "The answer is 42."
-        mock_response.tool_calls = None
-        mock_llm_client.chat_completion.return_value = mock_response
+        mock_response.tool_calls = []
+        mock_response.token_usage = {"input_tokens": 10, "output_tokens": 5, "total_tokens": 15}
+        mock_response.raw_response = {"id": "test-response"}
+        mock_llm_client.chat = AsyncMock(return_value=mock_response)
         
         result = await agent.run("What is 2 + 2?")
         
@@ -149,26 +151,31 @@ class TestAgent:
         read_tool = MCPTool(
             name="read_file",
             description="Read a file",
-            parameters={"type": "object", "properties": {"path": {"type": "string"}}},
+            input_schema={"type": "object", "properties": {"path": {"type": "string"}}},
             server_name="filesystem"
         )
         mock_mcp_manager.get_available_tools.return_value = [read_tool]
-        mock_mcp_manager.get_llm_tools.return_value = [read_tool.to_llm_tool()]
         
         # Mock LLM responses
-        tool_function = Mock()
-        tool_function.name = "read_file"
-        tool_function.arguments = '{"path": "/test.txt"}'
+        from smolval.llm_client import ToolCall
+        
+        tool_call = ToolCall(
+            id="call_1",
+            name="read_file",
+            arguments={"path": "/test.txt"}
+        )
         
         responses = [
             # First response: decides to use tool
-            Mock(content="I need to read the file", tool_calls=[
-                Mock(function=tool_function)
-            ]),
+            Mock(content="I need to read the file", tool_calls=[tool_call], 
+                 token_usage={"input_tokens": 10, "output_tokens": 5, "total_tokens": 15},
+                 raw_response={"id": "test-response-1"}),
             # Second response: provides final answer
-            Mock(content="Based on the file, the answer is 42.", tool_calls=None)
+            Mock(content="Based on the file, the answer is 42.", tool_calls=[], 
+                 token_usage={"input_tokens": 15, "output_tokens": 8, "total_tokens": 23},
+                 raw_response={"id": "test-response-2"})
         ]
-        mock_llm_client.chat_completion.side_effect = responses
+        mock_llm_client.chat = AsyncMock(side_effect=responses)
         
         # Mock tool execution
         tool_result = MCPToolResult(
@@ -206,14 +213,20 @@ class TestAgent:
         agent = Agent(agent_config, mock_llm_client, mock_mcp_manager)
         
         # Mock LLM always wants to use a tool
-        tool_function = Mock()
-        tool_function.name = "some_tool"
-        tool_function.arguments = '{}'
+        from smolval.llm_client import ToolCall
+        
+        tool_call = ToolCall(
+            id="call_1",
+            name="some_tool",
+            arguments={}
+        )
         
         mock_response = Mock()
         mock_response.content = "I need to use a tool"
-        mock_response.tool_calls = [Mock(function=tool_function)]
-        mock_llm_client.chat_completion.return_value = mock_response
+        mock_response.tool_calls = [tool_call]
+        mock_response.token_usage = {"input_tokens": 10, "output_tokens": 5, "total_tokens": 15}
+        mock_response.raw_response = {"id": "test-response"}
+        mock_llm_client.chat = AsyncMock(return_value=mock_response)
         
         # Mock tool execution
         tool_result = MCPToolResult(
@@ -240,19 +253,27 @@ class TestAgent:
         agent = Agent(agent_config, mock_llm_client, mock_mcp_manager)
         
         # Mock LLM wants to use tool
-        tool_function = Mock()
-        tool_function.name = "failing_tool"
-        tool_function.arguments = '{}'
+        from smolval.llm_client import ToolCall
+        
+        tool_call = ToolCall(
+            id="call_1",
+            name="failing_tool",
+            arguments={}
+        )
         
         mock_response = Mock()
         mock_response.content = "I'll use a tool"
-        mock_response.tool_calls = [Mock(function=tool_function)]
+        mock_response.tool_calls = [tool_call]
+        mock_response.token_usage = {"input_tokens": 10, "output_tokens": 5, "total_tokens": 15}
+        mock_response.raw_response = {"id": "test-response-1"}
         
         # Mock LLM handles error and provides final answer
         final_response = Mock()
         final_response.content = "I encountered an error but can still answer."
-        final_response.tool_calls = None
-        mock_llm_client.chat_completion.side_effect = [mock_response, final_response]
+        final_response.tool_calls = []
+        final_response.token_usage = {"input_tokens": 12, "output_tokens": 8, "total_tokens": 20}
+        final_response.raw_response = {"id": "test-response-2"}
+        mock_llm_client.chat = AsyncMock(side_effect=[mock_response, final_response])
         
         # Mock tool execution failure
         tool_result = MCPToolResult(
@@ -280,7 +301,7 @@ class TestAgent:
         agent = Agent(agent_config, mock_llm_client, mock_mcp_manager)
         
         # Mock LLM client failure
-        mock_llm_client.chat_completion.side_effect = Exception("API Error")
+        mock_llm_client.chat = AsyncMock(side_effect=Exception("API Error"))
         
         result = await agent.run("Simple question")
         
@@ -294,26 +315,41 @@ class TestAgent:
         """Test handling malformed tool calls from LLM."""
         agent = Agent(agent_config, mock_llm_client, mock_mcp_manager)
         
-        # Mock LLM with malformed tool call
-        tool_function = Mock()
-        tool_function.name = "test_tool"
-        tool_function.arguments = 'invalid json'
+        # Mock LLM with tool call that will fail during execution
+        from smolval.llm_client import ToolCall
+        
+        # Create a tool call with valid format but will cause execution error
+        tool_call = ToolCall(
+            id="call_1",
+            name="nonexistent_tool",  # Tool that doesn't exist
+            arguments={}
+        )
         
         mock_response = Mock()
         mock_response.content = "I'll use a tool"
-        mock_response.tool_calls = [Mock(function=tool_function)]
+        mock_response.tool_calls = [tool_call]
+        mock_response.token_usage = {"input_tokens": 10, "output_tokens": 5, "total_tokens": 15}
+        mock_response.raw_response = {"id": "test-response-1"}
         
         # Mock LLM recovery
         final_response = Mock()
         final_response.content = "I'll provide an answer without tools."
-        final_response.tool_calls = None
-        mock_llm_client.chat_completion.side_effect = [mock_response, final_response]
+        final_response.tool_calls = []
+        final_response.token_usage = {"input_tokens": 12, "output_tokens": 8, "total_tokens": 20}
+        final_response.raw_response = {"id": "test-response-2"}
+        mock_llm_client.chat = AsyncMock(side_effect=[mock_response, final_response])
+        
+        # Mock tool execution to raise an error for unknown tools
+        async def mock_execute_tool(tool_name, arguments):
+            raise ValueError(f"Tool '{tool_name}' not found")
+        
+        mock_mcp_manager.execute_tool = mock_execute_tool
         
         result = await agent.run("Test malformed call")
         
         assert result.success is True
         assert result.total_iterations == 2
-        assert "error parsing" in result.steps[0].observation.lower() or "invalid" in result.steps[0].observation.lower()
+        assert "not found" in result.steps[0].observation.lower() or "error executing tool" in result.steps[0].observation.lower()
 
     def test_conversation_history_management(self, agent_config: Config, mock_llm_client: Mock,
                                            mock_mcp_manager: Mock) -> None:
@@ -326,7 +362,7 @@ class TestAgent:
         agent._add_message("user", "How are you?")
         
         assert len(agent.conversation_history) == 3
-        assert agent.conversation_history[0]["role"] == "user"
-        assert agent.conversation_history[0]["content"] == "Hello"
-        assert agent.conversation_history[1]["role"] == "assistant"
-        assert agent.conversation_history[2]["content"] == "How are you?"
+        assert agent.conversation_history[0].role == "user"
+        assert agent.conversation_history[0].content == "Hello"
+        assert agent.conversation_history[1].role == "assistant"
+        assert agent.conversation_history[2].content == "How are you?"

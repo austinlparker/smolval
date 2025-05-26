@@ -1,0 +1,39 @@
+mcp_servers:
+  # No API key required - basic file operations
+  - name: "filesystem"
+    command: ["npx", "@modelcontextprotocol/server-filesystem", "."]
+    env: {}
+  
+  # No API key required - web content fetching
+  - name: "fetch"
+    command: ["uvx", "mcp-server-fetch"]
+    env: {}
+  
+  # No API key required - local database (Docker-based)
+  # - name: "sqlite"
+  #   command: ["docker", "run", "--rm", "-i", "mcp/sqlite", "--db-path", "/tmp/data.db"]
+  #   env: {}
+
+  # Optional servers requiring API keys (comment out if not needed)
+  # - name: "brave_search" 
+  #   command: ["npx", "@modelcontextprotocol/server-brave-search"]
+  #   env:
+  #     BRAVE_API_KEY: "${BRAVE_API_KEY}"
+  # - name: "github"
+  #   command: ["npx", "@modelcontextprotocol/server-github"]
+  #   env:
+  #     GITHUB_PERSONAL_ACCESS_TOKEN: "${GITHUB_TOKEN}"
+
+llm:
+  provider: "ollama"
+  model: "gemma3:1b-it-qat"  # Requires: ollama pull gemma3:1b-it-qat
+  # Alternative models (if you have them installed):
+  # model: "llama3.2:3b"  # Requires: ollama pull llama3.2:3b
+  # model: "qwen2.5:7b"   # Requires: ollama pull qwen2.5:7b
+  base_url: "http://localhost:11434"  # Default Ollama URL
+  temperature: 0.1
+  max_tokens: 500
+
+evaluation:
+  timeout_seconds: 60
+  max_iterations: 10

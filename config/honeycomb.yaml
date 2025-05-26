@@ -1,0 +1,27 @@
+mcp_servers:
+  - name: "filesystem"
+    command: ["npx", "@modelcontextprotocol/server-filesystem", "."]
+    env: {}
+  - name: "honeycomb"
+    command:
+      [
+        "npx",
+        "mcp-remote",
+        "https://mcp.honeycomb.io/sse",
+        "--header",
+        "Authorization: Bearer ${HONEYCOMB_API_KEY}",
+      ]
+    env:
+      {
+        HONEYCOMB_API_KEY: "hcamk_01jw4y1bt6e5p9sncpr820zgnn:p0mn6nyf92adnvfpnj4amyxw59p4www1",
+      }
+
+llm:
+  provider: "anthropic"
+  model: "claude-4-sonnet" # Latest Claude 4 Sonnet (May 2025)
+  api_key: "${ANTHROPIC_API_KEY}" # Set ANTHROPIC_API_KEY environment variable
+  temperature: 0.1
+
+evaluation:
+  timeout_seconds: 120 # Longer timeout for complex analysis
+  max_iterations: 15 # More iterations for thorough analysis

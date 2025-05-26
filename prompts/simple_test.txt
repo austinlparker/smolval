@@ -1,1 +1,0 @@
-Test the basic functionality of the MCP server by asking it to perform a simple operation. For filesystem servers, try to list the contents of the current directory.

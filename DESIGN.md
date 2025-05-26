@@ -17,10 +17,10 @@ smolval is a lightweight, self-contained Python application for evaluating MCP (
    - Handles protocol communication and tool discovery
    - Provides unified interface for tool execution
 
-3. **Evaluation Framework** (`evaluator.py`)
-   - Loads evaluation prompts from files
-   - Executes test scenarios against MCP servers
-   - Collects and structures results
+3. **LLM Client Interface** (`llm_client.py`)
+   - Unified interface for multiple LLM providers
+   - Supports Anthropic Claude, OpenAI, and Ollama
+   - Handles provider-specific authentication and formatting
 
 4. **Configuration System** (`config.py`)
    - YAML-based configuration for MCP servers
@@ -58,22 +58,30 @@ def evaluate_prompt(prompt: str, mcp_tools: List[Tool]) -> EvaluationResult:
 ### MCP Server Configuration (`config.yaml`)
 ```yaml
 mcp_servers:
+  # NPM-based filesystem server
   - name: "filesystem"
-    command: ["python", "-m", "mcp_server_filesystem", "/tmp"]
+    command: ["npx", "@modelcontextprotocol/server-filesystem", "/tmp"]
     env: {}
-  - name: "web_search"
-    command: ["node", "web-search-server.js"]
-    env:
-      API_KEY: "${WEB_SEARCH_API_KEY}"
+  
+  # Python-based web content fetching
+  - name: "fetch"
+    command: ["uvx", "mcp-server-fetch"]
+    env: {}
+  
+  # Docker-based SQLite database
+  - name: "sqlite"
+    command: ["docker", "run", "--rm", "-i", "-v", "mcp-test:/mcp", "mcp/sqlite", "--db-path", "/mcp/test.db"]
+    env: {}
 
 llm:
-  provider: "anthropic"  # or "openai"
-  model: "claude-3-sonnet-20240229"
+  provider: "anthropic"  # or "openai" or "ollama"
+  model: "claude-4-sonnet"
+  api_key: "${ANTHROPIC_API_KEY}"
   temperature: 0.1
 
 evaluation:
-  timeout_seconds: 60
-  max_iterations: 10
+  timeout_seconds: 120
+  max_iterations: 15
   output_format: "json"
 ```
 
@@ -99,10 +107,10 @@ smolval eval prompts/search.txt --config custom.yaml
 ### Batch Processing
 ```bash
 # Run multiple MCP servers against same prompt
-smolval batch --servers fs,web --prompt prompts/integration.txt
+smolval batch --servers filesystem,fetch --prompt prompts/integration.txt
 
 # Compare server performance
-smolval compare --baseline fs --test web --prompts prompts/
+smolval compare --baseline filesystem --test fetch --prompts prompts/
 ```
 
 ## Implementation Phases
@@ -158,15 +166,30 @@ ENTRYPOINT ["uv", "run", "smolval"]
 
 ## Dependencies
 
-- `mcp` - Official MCP Python SDK
-- `anthropic` / `openai` - LLM providers
+### Core Dependencies
+- `mcp` - Official MCP Python SDK for protocol communication
+- `llm` - Universal LLM library with plugin support for multiple providers
+- `llm-anthropic` - Anthropic Claude support for llm library
 - `pydantic` - Configuration and data validation
-- `click` - CLI interface
-- `pyyaml` - Configuration parsing
-- `rich` - Enhanced terminal output
-- `pytest` - Testing framework
-- `pytest-asyncio` - Async testing support
-- `pytest-docker` - Docker integration testing
+- `click` - CLI interface framework
+- `pyyaml` - YAML configuration parsing
+- `rich` - Enhanced terminal output and formatting
+- `pandas` - Data analysis for result processing
+- `jinja2` - Template engine for output formatting
+
+### Development Dependencies
+- `pytest` - Testing framework with fixtures
+- `pytest-asyncio` - Async testing support for MCP operations
+- `pytest-docker` - Docker integration testing for containerized servers
+- `pytest-cov` - Code coverage reporting
+- `black` - Code formatting
+- `isort` - Import sorting
+- `mypy` - Static type checking
+- `ruff` - Fast Python linter
+
+### Optional Dependencies
+- `llm-ollama` - Local Ollama model support
+- `requests` - HTTP client for external API testing
 
 ## Success Metrics
 
