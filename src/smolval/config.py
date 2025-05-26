@@ -7,10 +7,13 @@ from typing import Any
 
 import yaml
 from pydantic import BaseModel, Field, field_validator, model_validator
+
 try:
     from dotenv import load_dotenv
 except ImportError:
-    load_dotenv = lambda *args, **kwargs: None
+    def load_dotenv(*args: object, **kwargs: object) -> bool:  # type: ignore[misc]
+        """Stub function when python-dotenv is not available."""
+        return False
 
 # Load environment variables from a .env file if present
 load_dotenv()
@@ -21,9 +24,11 @@ class MCPServerConfig(BaseModel):
 
     name: str = Field(..., description="Unique name for the MCP server")
     command: list[str] = Field(..., description="Command to start the server")
-    env: dict[str, str] = Field(default_factory=dict, description="Environment variables")
+    env: dict[str, str] = Field(
+        default_factory=dict, description="Environment variables"
+    )
 
-    @field_validator('command')
+    @field_validator("command")
     @classmethod
     def command_not_empty(cls, v: list[str]) -> list[str]:
         """Validate command is not empty."""
@@ -37,12 +42,16 @@ class LLMConfig(BaseModel):
 
     provider: str = Field(..., description="LLM provider (anthropic, openai, ollama)")
     model: str = Field(..., description="Model name")
-    api_key: str | None = Field(default=None, description="API key for the provider (not required for ollama)")
+    api_key: str | None = Field(
+        default=None, description="API key for the provider (not required for ollama)"
+    )
     temperature: float = Field(default=0.1, description="Temperature for generation")
     max_tokens: int = Field(default=1000, description="Maximum tokens to generate")
-    base_url: str | None = Field(default=None, description="Base URL for local providers like Ollama")
+    base_url: str | None = Field(
+        default=None, description="Base URL for local providers like Ollama"
+    )
 
-    @field_validator('provider')
+    @field_validator("provider")
     @classmethod
     def valid_provider(cls, v: str) -> str:
         """Validate provider is supported."""
@@ -50,17 +59,17 @@ class LLMConfig(BaseModel):
             raise ValueError("Provider must be 'anthropic', 'openai', or 'ollama'")
         return v
 
-    @field_validator('api_key')
+    @field_validator("api_key")
     @classmethod
-    def api_key_required_for_cloud_providers(cls, v: str | None, info) -> str | None:
+    def api_key_required_for_cloud_providers(cls, v: str | None, info: object) -> str | None:
         """Validate API key is provided for cloud providers."""
-        if hasattr(info, 'data') and 'provider' in info.data:
-            provider = info.data['provider']
+        if hasattr(info, "data") and "provider" in info.data:
+            provider = info.data["provider"]
             if provider in ("anthropic", "openai") and not v:
                 raise ValueError(f"API key is required for {provider}")
         return v
 
-    @field_validator('temperature')
+    @field_validator("temperature")
     @classmethod
     def valid_temperature(cls, v: float) -> float:
         """Validate temperature is in valid range."""
@@ -74,9 +83,11 @@ class EvaluationConfig(BaseModel):
 
     timeout_seconds: int = Field(default=60, description="Timeout for evaluations")
     max_iterations: int = Field(default=10, description="Maximum agent loop iterations")
-    output_format: str = Field(default="json", description="Output format (json, csv, markdown)")
+    output_format: str = Field(
+        default="json", description="Output format (json, csv, markdown)"
+    )
 
-    @field_validator('timeout_seconds')
+    @field_validator("timeout_seconds")
     @classmethod
     def positive_timeout(cls, v: int) -> int:
         """Validate timeout is positive."""
@@ -84,7 +95,7 @@ class EvaluationConfig(BaseModel):
             raise ValueError("Timeout must be positive")
         return v
 
-    @field_validator('max_iterations')
+    @field_validator("max_iterations")
     @classmethod
     def positive_iterations(cls, v: int) -> int:
         """Validate max_iterations is positive."""
@@ -92,7 +103,7 @@ class EvaluationConfig(BaseModel):
             raise ValueError("Max iterations must be positive")
         return v
 
-    @field_validator('output_format')
+    @field_validator("output_format")
     @classmethod
     def valid_format(cls, v: str) -> str:
         """Validate output format is supported."""
@@ -104,13 +115,19 @@ class EvaluationConfig(BaseModel):
 class Config(BaseModel):
     """Main configuration for smolval."""
 
-    mcp_servers: list[MCPServerConfig] = Field(..., description="MCP servers to connect to")
+    mcp_servers: list[MCPServerConfig] = Field(
+        ..., description="MCP servers to connect to"
+    )
     llm: LLMConfig = Field(..., description="LLM configuration")
-    evaluation: EvaluationConfig = Field(default_factory=EvaluationConfig, description="Evaluation settings")
-    allow_empty_servers: bool = Field(default=False, description="Allow empty MCP server list (for testing)")
+    evaluation: EvaluationConfig = Field(
+        default_factory=EvaluationConfig, description="Evaluation settings"
+    )
+    allow_empty_servers: bool = Field(
+        default=False, description="Allow empty MCP server list (for testing)"
+    )
 
-    @model_validator(mode='after')
-    def validate_mcp_servers(self) -> 'Config':
+    @model_validator(mode="after")
+    def validate_mcp_servers(self) -> "Config":
         """Validate at least one MCP server is configured (unless allow_empty_servers is True)."""
         if not self.mcp_servers and not self.allow_empty_servers:
             raise ValueError("At least one MCP server must be configured")
@@ -145,12 +162,12 @@ class Config(BaseModel):
             # Expand ${VAR} and ${VAR:-default} patterns
             def replace_var(match: re.Match[str]) -> str:
                 var_expr = match.group(1)
-                if ':-' in var_expr:
-                    var_name, default = var_expr.split(':-', 1)
+                if ":-" in var_expr:
+                    var_name, default = var_expr.split(":-", 1)
                     return os.environ.get(var_name, default)
                 else:
                     return os.environ.get(var_expr, match.group(0))
 
-            return re.sub(r'\$\{([^}]+)\}', replace_var, obj)
+            return re.sub(r"\$\{([^}]+)\}", replace_var, obj)
         else:
             return obj

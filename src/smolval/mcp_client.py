@@ -3,8 +3,6 @@
 import logging
 import os
 import shutil
-import subprocess
-import sys
 from contextlib import AsyncExitStack, redirect_stderr
 from io import StringIO
 from typing import Any
@@ -33,8 +31,8 @@ class MCPTool(BaseModel):
             "function": {
                 "name": self.name,
                 "description": self.description,
-                "parameters": self.input_schema
-            }
+                "parameters": self.input_schema,
+            },
         }
 
 
@@ -62,7 +60,7 @@ class MCPClientManager:
         try:
             logger.debug("Connecting to MCP server: %s", config.name)
             logger.debug("Command: %s", config.command)
-            
+
             # Create server parameters for the MCP stdio client
             # The first element is the command, the rest are arguments
             command = config.command[0]
@@ -73,31 +71,24 @@ class MCPClientManager:
                 command = shutil.which("npx") or "npx"
                 logger.debug("Using npx command: %s", command)
 
-            logger.debug("Full command with args: %s %s", command, ' '.join(args))
+            logger.debug("Full command with args: %s %s", command, " ".join(args))
 
             # Create environment with additional variables to suppress output
             env_vars = {**os.environ, **config.env} if config.env else os.environ.copy()
-            
+
             # Add variables to suppress verbose output for known servers (unless debug mode)
             if not debug:
-                env_vars.update({
-                    'QUIET': '1',
-                    'SILENT': '1', 
-                    'NO_DEBUG': '1',
-                    'MCP_QUIET': '1'
-                })
+                env_vars.update(
+                    {"QUIET": "1", "SILENT": "1", "NO_DEBUG": "1", "MCP_QUIET": "1"}
+                )
                 logger.debug("Added quiet environment variables")
             else:
                 logger.debug("Debug mode: not adding quiet environment variables")
-            
+
             # For some servers, we need to suppress both stdout and stderr
-            # But MCP protocol uses stdio, so we'll try stderr first
-            stderr_setting = None if debug else subprocess.DEVNULL
+            # MCP protocol uses stdio
             server_params = StdioServerParameters(
-                command=command,
-                args=args,
-                env=env_vars,
-                stderr=stderr_setting
+                command=command, args=args, env=env_vars
             )
 
             logger.debug("Created server parameters for %s", config.name)
@@ -116,12 +107,12 @@ class MCPClientManager:
                     ClientSession(read, write)
                 )
                 logger.debug("Created client session for %s", config.name)
-                
+
                 await session.initialize()
                 logger.debug("Initialized session for %s", config.name)
             else:
                 stderr_capture = StringIO()
-                
+
                 # Use proper async context manager pattern from official example
                 with redirect_stderr(stderr_capture):
                     stdio_transport = await self.exit_stack.enter_async_context(
@@ -135,9 +126,7 @@ class MCPClientManager:
                     await session.initialize()
 
             # Store the session for tool execution
-            self.clients[config.name] = {
-                'session': session
-            }
+            self.clients[config.name] = {"session": session}
 
             # Discover available tools
             await self._discover_tools(config.name, session)
@@ -159,19 +148,25 @@ class MCPClientManager:
             for tool in tools_response.tools:
                 mcp_tool = MCPTool(
                     name=tool.name,
-                    description=tool.description,
+                    description=tool.description or "",
                     input_schema=tool.inputSchema or {},
-                    server_name=server_name
+                    server_name=server_name,
                 )
                 self.tools.append(mcp_tool)
 
-            logger.debug("Discovered %d tools for server %s", len(tools_response.tools), server_name)
+            logger.debug(
+                "Discovered %d tools for server %s",
+                len(tools_response.tools),
+                server_name,
+            )
 
         except Exception as e:
             # Log warning but don't fail the connection
             logger.warning("Failed to discover tools for %s: %s", server_name, e)
 
-    async def execute_tool(self, tool_name: str, arguments: dict[str, Any]) -> MCPToolResult:
+    async def execute_tool(
+        self, tool_name: str, arguments: dict[str, Any]
+    ) -> MCPToolResult:
         """Execute a tool on the appropriate MCP server."""
         # Find the tool
         tool = self._find_tool(tool_name)
@@ -183,38 +178,46 @@ class MCPClientManager:
         if not client_info:
             raise ValueError(f"No client available for server '{tool.server_name}'")
 
-        session = client_info['session']
+        session = client_info["session"]
 
         try:
             # Execute the tool
-            logger.debug("Executing tool %s on server %s with arguments: %s", tool_name, tool.server_name, arguments)
+            logger.debug(
+                "Executing tool %s on server %s with arguments: %s",
+                tool_name,
+                tool.server_name,
+                arguments,
+            )
             result = await session.call_tool(tool_name, arguments)
 
             # Extract content from result
             content_parts = []
-            if hasattr(result, 'content') and result.content:
+            if hasattr(result, "content") and result.content:
                 for content_item in result.content:
-                    if hasattr(content_item, 'text'):
+                    if hasattr(content_item, "text"):
                         content_parts.append(content_item.text)
-                    elif hasattr(content_item, 'data'):
+                    elif hasattr(content_item, "data"):
                         content_parts.append(str(content_item.data))
 
             content = "\n".join(content_parts) if content_parts else str(result)
 
             return MCPToolResult(
-                tool_name=tool_name,
-                server_name=tool.server_name,
-                content=content
+                tool_name=tool_name, server_name=tool.server_name, content=content
             )
 
         except Exception as e:
             # Log as debug instead of error since tool failures are often expected in evaluations
-            logger.debug("Tool execution failed for %s on server %s: %s", tool_name, tool.server_name, e)
+            logger.debug(
+                "Tool execution failed for %s on server %s: %s",
+                tool_name,
+                tool.server_name,
+                e,
+            )
             return MCPToolResult(
                 tool_name=tool_name,
                 server_name=tool.server_name,
                 content="",
-                error=str(e)
+                error=str(e),
             )
 
     def _find_tool(self, tool_name: str) -> MCPTool | None:
@@ -235,7 +238,7 @@ class MCPClientManager:
     async def close(self) -> None:
         """Close all MCP connections and clean up resources."""
         logger.debug("Starting MCP client manager cleanup...")
-        
+
         # Use the exit stack to properly clean up all contexts
         try:
             logger.debug("Closing exit stack with %d contexts", len(self.clients))
@@ -243,7 +246,9 @@ class MCPClientManager:
             logger.debug("Exit stack closed successfully")
         except ExceptionGroup as eg:
             if str(eg).startswith("unhandled errors in a TaskGroup"):
-                logger.debug("Ignoring TaskGroupError during exit_stack cleanup: %s", eg)
+                logger.debug(
+                    "Ignoring TaskGroupError during exit_stack cleanup: %s", eg
+                )
             else:
                 logger.warning("Error closing exit stack: %s", eg)
         except Exception as e:

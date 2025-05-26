@@ -1,11 +1,8 @@
 """Pytest configuration and fixtures for smolval tests."""
 
-import asyncio
 from pathlib import Path
-from typing import AsyncGenerator, Generator
 
 import pytest
-
 
 # Remove custom event_loop fixture to avoid deprecation warning
 # pytest-asyncio will handle this automatically
@@ -25,7 +22,7 @@ def sample_prompt() -> str:
     1. List files in the current directory
     2. Read the contents of any .txt files found
     3. Summarize what you discovered
-    
+
     Expected outcome: Successfully demonstrate file system operations.
     """
 
@@ -38,18 +35,18 @@ def sample_config() -> dict:
             {
                 "name": "filesystem",
                 "command": ["python", "-m", "mcp_server_filesystem", "/tmp"],
-                "env": {}
+                "env": {},
             }
         ],
         "llm": {
             "provider": "anthropic",
             "model": "anthropic/claude-3-haiku-20240307",
             "api_key": "test-api-key",
-            "temperature": 0.1
+            "temperature": 0.1,
         },
         "evaluation": {
             "timeout_seconds": 60,
             "max_iterations": 10,
-            "output_format": "json"
-        }
+            "output_format": "json",
+        },
     }

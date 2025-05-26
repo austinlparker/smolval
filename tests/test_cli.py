@@ -1,14 +1,8 @@
 """Tests for CLI module."""
 
-import tempfile
-from pathlib import Path
-from unittest.mock import Mock, patch, AsyncMock
 
-import pytest
-import yaml
 
 from smolval.cli import _analyze_comparison
-from smolval.config import Config, LLMConfig, MCPServerConfig, EvaluationConfig
 
 
 class TestCLI:
@@ -24,11 +18,16 @@ class TestCLI:
             "tool_calls_failed": 0,
             "total_tokens": 100,
             "steps": [
-                {"step": 1, "thought": "Test thought", "action": {"tool": "test", "arguments": {}}, "observation": "Test observation"}
+                {
+                    "step": 1,
+                    "thought": "Test thought",
+                    "action": {"tool": "test", "arguments": {}},
+                    "observation": "Test observation",
+                }
             ],
-            "final_output": "Test output"
+            "final_output": "Test output",
         }
-        
+
         test_result = {
             "success": True,
             "iterations": 2,
@@ -37,13 +36,20 @@ class TestCLI:
             "tool_calls_failed": 1,
             "total_tokens": 80,
             "steps": [
-                {"step": 1, "thought": "Test thought", "action": {"tool": "test", "arguments": {}}, "observation": "Test observation"}
+                {
+                    "step": 1,
+                    "thought": "Test thought",
+                    "action": {"tool": "test", "arguments": {}},
+                    "observation": "Test observation",
+                }
             ],
-            "final_output": "Test output"
+            "final_output": "Test output",
         }
-        
-        analysis = _analyze_comparison("baseline", "test", [baseline_result], [test_result])
-        
+
+        analysis = _analyze_comparison(
+            "baseline", "test", [baseline_result], [test_result]
+        )
+
         assert analysis["success_rates"]["baseline"] == 1.0
         assert analysis["success_rates"]["test"] == 1.0
         assert analysis["total_prompts"] == 1
@@ -61,9 +67,9 @@ class TestCLI:
             "tool_calls_failed": 2,
             "total_tokens": 200,
             "steps": [],
-            "final_output": "Failed"
+            "final_output": "Failed",
         }
-        
+
         test_result = {
             "success": True,
             "iterations": 2,
@@ -72,11 +78,13 @@ class TestCLI:
             "tool_calls_failed": 0,
             "total_tokens": 80,
             "steps": [],
-            "final_output": "Success"
+            "final_output": "Success",
         }
-        
-        analysis = _analyze_comparison("baseline", "test", [baseline_result], [test_result])
-        
+
+        analysis = _analyze_comparison(
+            "baseline", "test", [baseline_result], [test_result]
+        )
+
         assert analysis["success_rates"]["baseline"] == 0.0
         assert analysis["success_rates"]["test"] == 1.0
         assert analysis["total_prompts"] == 1
@@ -92,9 +100,9 @@ class TestCLI:
             "tool_calls_failed": 0,
             "total_tokens": 0,
             "steps": [],
-            "final_output": "Success"
+            "final_output": "Success",
         }
-        
+
         test_result = {
             "success": True,
             "iterations": 1,
@@ -103,11 +111,13 @@ class TestCLI:
             "tool_calls_failed": 0,
             "total_tokens": 100,
             "steps": [],
-            "final_output": "Success"
+            "final_output": "Success",
         }
-        
-        analysis = _analyze_comparison("baseline", "test", [baseline_result], [test_result])
-        
+
+        analysis = _analyze_comparison(
+            "baseline", "test", [baseline_result], [test_result]
+        )
+
         # Should handle division by zero gracefully
         assert "total_token_usage" in analysis
         assert "baseline" in analysis["total_token_usage"]
