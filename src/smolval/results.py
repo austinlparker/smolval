@@ -167,7 +167,9 @@ class ResultsFormatter:
 
         return self._write_csv(csv_data, output_file)
 
-    def _write_csv(self, data: list[dict[str, Any]], output_file: str | None = None) -> str:
+    def _write_csv(
+        self, data: list[dict[str, Any]], output_file: str | None = None
+    ) -> str:
         """Write data to CSV format."""
         if not data:
             return ""

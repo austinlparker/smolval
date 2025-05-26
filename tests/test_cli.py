@@ -1,7 +1,5 @@
 """Tests for CLI module."""
 
-
-
 from smolval.cli import _analyze_comparison
 
 

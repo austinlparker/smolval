@@ -11,9 +11,11 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 try:
     from dotenv import load_dotenv
 except ImportError:
+
     def load_dotenv(*args: object, **kwargs: object) -> bool:  # type: ignore[misc]
         """Stub function when python-dotenv is not available."""
         return False
+
 
 # Load environment variables from a .env file if present
 load_dotenv()
@@ -61,7 +63,9 @@ class LLMConfig(BaseModel):
 
     @field_validator("api_key")
     @classmethod
-    def api_key_required_for_cloud_providers(cls, v: str | None, info: object) -> str | None:
+    def api_key_required_for_cloud_providers(
+        cls, v: str | None, info: object
+    ) -> str | None:
         """Validate API key is provided for cloud providers."""
         if hasattr(info, "data") and "provider" in info.data:
             provider = info.data["provider"]
