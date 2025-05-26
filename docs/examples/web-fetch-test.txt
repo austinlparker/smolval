@@ -1,0 +1,19 @@
+Web Fetch Server Evaluation
+
+Test the web fetching MCP server capabilities:
+
+1. Fetch the content from https://httpbin.org/get to test basic HTTP GET functionality
+2. Extract and report the origin IP address from the response
+3. Try fetching JSON data from https://httpbin.org/json
+4. Parse the JSON response and summarize the slideshow information
+5. Test error handling by attempting to fetch from an invalid URL like https://this-domain-does-not-exist-12345.com
+6. Fetch content from https://example.com and extract the page title
+
+Success criteria:
+- Successfully retrieves content from valid URLs
+- Properly parses JSON responses
+- Gracefully handles invalid URLs with appropriate error messages
+- Extracts specific information from web pages
+- Response times are reasonable (under 10 seconds per request)
+
+This evaluation tests HTTP client functionality, JSON parsing, and error handling.

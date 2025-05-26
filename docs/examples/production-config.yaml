@@ -1,0 +1,45 @@
+# Production Configuration for smolval
+# Comprehensive setup with all MCP servers and optimal settings
+
+mcp_servers:
+  # Filesystem server with restricted access to data directory
+  - name: "filesystem"
+    command: ["npx", "@modelcontextprotocol/server-filesystem", "/data"]
+    env: {}
+
+  # Web content fetching with production user agent
+  - name: "fetch"
+    command: ["uvx", "mcp-server-fetch"]
+    env:
+      USER_AGENT: "smolval-production/1.0"
+      TIMEOUT: "30"
+
+  # SQLite database server via Docker
+  - name: "sqlite"
+    command: ["docker", "run", "--rm", "-i", "-v", "prod-db:/data", "mcp/sqlite", "--db-path", "/data/production.db"]
+    env: {}
+
+llm:
+  # Use Claude Sonnet for best performance and reliability
+  provider: "anthropic"
+  model: "claude-3-5-sonnet-20241022"
+  api_key: "${ANTHROPIC_API_KEY}"
+  temperature: 0.1
+  max_tokens: 8192
+
+evaluation:
+  # Production timeouts and settings
+  timeout_seconds: 300
+  max_iterations: 20
+  output_format: "html"
+  results_dir: "/var/log/smolval/results"
+  
+  # Production logging
+  log_level: "INFO"
+  include_timestamps: true
+  include_performance_metrics: true
+  save_intermediate_results: true
+  
+  # Retry configuration for reliability
+  max_retries: 3
+  retry_delay: 2.0

@@ -1,0 +1,57 @@
+# Production-ready configuration with comprehensive MCP server setup
+
+mcp_servers:
+  # Filesystem server with restricted access
+  - name: "filesystem"
+    command: ["npx", "@modelcontextprotocol/server-filesystem", "/app/data"]
+    env:
+      READ_ONLY: "true"
+      MAX_DEPTH: "10"
+  
+  # Web fetch server with production limits
+  - name: "fetch"
+    command: ["uvx", "mcp-server-fetch"]
+    env:
+      TIMEOUT_SECONDS: "60"
+      MAX_RESPONSE_SIZE: "10485760"  # 10MB
+      USER_AGENT: "smolval-evaluator/1.0"
+      ENABLE_REDIRECTS: "true"
+      MAX_REDIRECTS: "5"
+  
+  # PostgreSQL server for database operations
+  - name: "postgres"
+    command: ["docker", "run", "--rm", "-i", "--net", "host", "mcp/postgres"]
+    env:
+      POSTGRES_HOST: "${DB_HOST}"
+      POSTGRES_PORT: "${DB_PORT:-5432}"
+      POSTGRES_DB: "${DB_NAME}"
+      POSTGRES_USER: "${DB_USER}"
+      POSTGRES_PASSWORD: "${DB_PASSWORD}"
+      CONNECTION_TIMEOUT: "30"
+      QUERY_TIMEOUT: "120"
+  
+  # SQLite server for local database testing
+  - name: "sqlite"
+    command: ["docker", "run", "--rm", "-i", "-v", "db-data:/data", "mcp/sqlite", "--db-path", "/data/production.db"]
+    env:
+      JOURNAL_MODE: "WAL"
+      SYNCHRONOUS: "NORMAL"
+
+# Production LLM configuration
+llm:
+  provider: "anthropic"
+  model: "claude-3-5-sonnet-20241022"
+  api_key: "${ANTHROPIC_API_KEY}"
+  temperature: 0.0  # Deterministic for production
+  max_tokens: 4096
+  timeout: 120
+
+# Production evaluation settings
+evaluation:
+  timeout_seconds: 300
+  max_iterations: 25
+  output_format: "json"
+  retry_attempts: 3
+  retry_delay: 2.0
+  parallel_servers: true
+  save_conversations: true

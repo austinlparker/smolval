@@ -1,0 +1,27 @@
+# Basic smolval configuration for development and testing
+
+mcp_servers:
+  # Filesystem server for local file operations
+  - name: "filesystem"
+    command: ["npx", "@modelcontextprotocol/server-filesystem", "."]
+    env: {}
+  
+  # Web fetch server for HTTP requests
+  - name: "fetch"
+    command: ["uvx", "mcp-server-fetch"]
+    env: {}
+
+# LLM configuration - requires ANTHROPIC_API_KEY environment variable
+llm:
+  provider: "anthropic"
+  model: "claude-3-5-sonnet-20241022"
+  api_key: "${ANTHROPIC_API_KEY}"
+  temperature: 0.1
+
+# Evaluation settings optimized for development
+evaluation:
+  timeout_seconds: 120
+  max_iterations: 15
+  output_format: "markdown"
+  retry_attempts: 2
+  save_conversations: true

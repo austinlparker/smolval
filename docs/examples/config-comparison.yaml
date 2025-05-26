@@ -1,0 +1,42 @@
+# Configuration for comparing multiple MCP servers
+
+mcp_servers:
+  # Baseline filesystem server
+  - name: "filesystem-v1"
+    command: ["npx", "@modelcontextprotocol/server-filesystem", "./test-data"]
+    env: {}
+  
+  # Alternative filesystem implementation
+  - name: "filesystem-v2"
+    command: ["npx", "@alternative/filesystem-server", "./test-data"]
+    env:
+      ENABLE_CACHING: "true"
+      MAX_FILE_SIZE: "10485760"  # 10MB
+  
+  # Web fetch servers with different configurations
+  - name: "fetch-basic"
+    command: ["uvx", "mcp-server-fetch"]
+    env: {}
+  
+  - name: "fetch-optimized"
+    command: ["uvx", "mcp-server-fetch"]
+    env:
+      TIMEOUT_SECONDS: "30"
+      MAX_RESPONSE_SIZE: "5242880"  # 5MB
+      ENABLE_COMPRESSION: "true"
+
+# Use Claude for consistent comparison results
+llm:
+  provider: "anthropic"
+  model: "claude-3-5-sonnet-20241022"
+  api_key: "${ANTHROPIC_API_KEY}"
+  temperature: 0.0  # Deterministic for fair comparison
+
+# Evaluation settings optimized for comparison
+evaluation:
+  timeout_seconds: 180
+  max_iterations: 20
+  output_format: "html"  # Best for side-by-side comparison
+  retry_attempts: 3
+  parallel_servers: false  # Sequential for accurate timing
+  save_conversations: true

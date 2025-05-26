@@ -1,0 +1,20 @@
+mcp_servers:
+  - name: "postgres"
+    command: 
+      - "docker"
+      - "run"
+      - "-i"
+      - "--rm"
+      - "mcp/postgres"
+      - "postgresql://ap@host.docker.internal:5432/smolval-test"
+    env: {}
+
+llm:
+  provider: "anthropic"
+  model: "claude-4-sonnet"
+  api_key: "${ANTHROPIC_API_KEY}"
+  temperature: 0.1
+
+evaluation:
+  timeout_seconds: 120
+  max_iterations: 15

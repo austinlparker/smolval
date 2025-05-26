@@ -1,0 +1,18 @@
+Filesystem Server Evaluation
+
+Test the filesystem MCP server capabilities with these operations:
+
+1. List all files in the current directory to understand the project structure
+2. Create a test directory called "eval_test_files"
+3. Create a text file inside the test directory with content "Hello from smolval evaluation"
+4. Read the content back to verify it was written correctly
+5. List the contents of the test directory to confirm the file exists
+6. Clean up by removing the test directory and its contents
+
+Success criteria:
+- All directory and file operations complete without errors
+- File content is accurately written and read back
+- Directory cleanup is successful
+- No permission or access errors occur
+
+This evaluation tests basic CRUD operations for file system interaction.
