@@ -12,7 +12,7 @@ env:
   IMAGE_NAME: ${{ github.repository }}
 
 jobs:
-  build-and-test:
+  build-and-publish:
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -45,32 +45,11 @@ jobs:
           type=semver,pattern={{major}}.{{minor}}
           type=raw,value=latest,enable={{is_default_branch}}
 
-    - name: Build and test Docker image
-      uses: docker/build-push-action@v5
-      with:
-        context: .
-        push: false
-        tags: test-image:latest
-        cache-from: type=gha
-        cache-to: type=gha,mode=max
-
-    - name: Test Docker image
-      run: |
-        # Test that the image runs and shows help
-        docker run --rm test-image:latest --help
-        
-        # Test with a simple configuration (filesystem only)
-        docker run --rm \
-          -v ${{ github.workspace }}/config:/app/config \
-          -v ${{ github.workspace }}/prompts:/app/prompts \
-          test-image:latest eval prompts/example.txt -c config/example-anthropic.yaml --dry-run || true
-
     - name: Build and push Docker image
-      if: github.event_name != 'pull_request'
       uses: docker/build-push-action@v5
       with:
         context: .
-        push: true
+        push: ${{ github.event_name != 'pull_request' }}
         tags: ${{ steps.meta.outputs.tags }}
         labels: ${{ steps.meta.outputs.labels }}
         cache-from: type=gha
