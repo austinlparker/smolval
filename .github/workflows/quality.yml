@@ -38,7 +38,3 @@ jobs:
       run: |
         uv run mypy src/ --show-error-codes
     
-    - name: Generate complexity report
-      run: |
-        uv run radon cc src/ --show-complexity --min B
-        uv run radon mi src/ --min B
