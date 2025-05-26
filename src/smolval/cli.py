@@ -731,7 +731,9 @@ def _analyze_comparison(
                 baseline if baseline_failed_tools <= test_failed_tools else test
             ),
             "token_efficiency": (
-                baseline if baseline_total_tokens <= test_total_tokens else test
+                baseline
+                if (baseline_total_tokens or 0) <= (test_total_tokens or 0)
+                else test
             ),
         },
     }
@@ -793,7 +795,7 @@ def _print_comparison_summary(analysis: dict) -> None:
     click.echo("💎 TOKEN EFFICIENCY:")
     baseline_tokens = analysis["total_token_usage"][baseline]
     test_tokens = analysis["total_token_usage"][test]
-    if baseline_tokens > 0 or test_tokens > 0:
+    if (baseline_tokens and baseline_tokens > 0) or (test_tokens and test_tokens > 0):
         click.echo(
             f"  {baseline}: {baseline_tokens:,} tokens"
             if baseline_tokens

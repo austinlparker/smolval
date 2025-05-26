@@ -107,7 +107,9 @@ class ResultsFormatter:
             result = result_item["result"]
             csv_data.append(
                 {
-                    "prompt_file": result_item["prompt_file"],
+                    "prompt_file": result_item.get("metadata", {}).get(
+                        "prompt_file", ""
+                    ),
                     "success": result["success"],
                     "final_answer": result["final_answer"]
                     .replace("\n", " ")
@@ -943,7 +945,7 @@ class ResultsFormatter:
             {% if result.final_answer %}
             <div class="final-answer">
                 <h3>🎉 Final Answer</h3>
-                <div class="answer-content">{{ result.final_answer }}</div>
+                <div class="answer-content">{{ result.final_answer|e }}</div>
             </div>
             {% endif %}
 
@@ -1588,7 +1590,7 @@ class ResultsFormatter:
                         {% if b_result.final_answer %}
                         <div class="final-answer">
                             <h4>🎉 Final Answer</h4>
-                            <div class="answer-content">{{ b_result.final_answer[:500] }}{{ '...' if b_result.final_answer|length > 500 else '' }}</div>
+                            <div class="answer-content">{{ b_result.final_answer[:500]|e }}{{ '...' if b_result.final_answer|length > 500 else '' }}</div>
                         </div>
                         {% endif %}
 
@@ -1640,7 +1642,7 @@ class ResultsFormatter:
                         {% if t_result.final_answer %}
                         <div class="final-answer">
                             <h4>🎉 Final Answer</h4>
-                            <div class="answer-content">{{ t_result.final_answer[:500] }}{{ '...' if t_result.final_answer|length > 500 else '' }}</div>
+                            <div class="answer-content">{{ t_result.final_answer[:500]|e }}{{ '...' if t_result.final_answer|length > 500 else '' }}</div>
                         </div>
                         {% endif %}
 
