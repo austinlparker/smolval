@@ -660,7 +660,7 @@
                         <div class="final-answer-section">
                             <div class="final-answer">
                                 <h4>🎯 Final Answer</h4>
-                                <div class="answer-text">{{ b_result.final_answer | markdown | safe }}</div>
+                                <div class="answer-text">{{ b_result.final_answer | e | markdown | safe }}</div>
                             </div>
                         </div>
                         {% endif %}
@@ -757,7 +757,7 @@
                         <div class="final-answer-section">
                             <div class="final-answer">
                                 <h4>🎯 Final Answer</h4>
-                                <div class="answer-text">{{ t_result.final_answer | markdown | safe }}</div>
+                                <div class="answer-text">{{ t_result.final_answer | e | markdown | safe }}</div>
                             </div>
                         </div>
                         {% endif %}

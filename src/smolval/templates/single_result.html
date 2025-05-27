@@ -571,7 +571,7 @@
 
                     <div class="result-panel">
                         <h3>📋 Final Answer</h3>
-                        <div style="line-height: 1.6;">{{ result.final_answer | markdown | safe }}</div>
+                        <div style="line-height: 1.6;">{{ result.final_answer | e | markdown | safe }}</div>
                     </div>
 
                     {% if total_tokens %}

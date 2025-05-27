@@ -731,7 +731,7 @@
                             {% if result_item.result.final_answer %}
                             <div class="final-answer-section">
                                 <h4>🎯 Final Answer</h4>
-                                <div class="answer-text">{{ result_item.result.final_answer | markdown | safe }}</div>
+                                <div class="answer-text">{{ result_item.result.final_answer | e | markdown | safe }}</div>
                             </div>
                             {% endif %}
 

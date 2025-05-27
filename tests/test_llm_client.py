@@ -443,7 +443,8 @@ And then I'll analyze the results."""
         mock_conversation.prompt.assert_called_once()
         call_args = mock_conversation.prompt.call_args
         assert call_args[1]["temperature"] == 0.7
-        assert call_args[1]["max_tokens"] == 1000
+        # Gemini doesn't support max_tokens parameter, so it shouldn't be passed
+        assert "max_tokens" not in call_args[1]
 
     def test_invalid_provider_raises_error(self):
         """Test that invalid provider raises error."""
