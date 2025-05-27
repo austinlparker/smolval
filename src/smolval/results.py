@@ -163,7 +163,7 @@ class ResultsFormatter:
         test_results = comparison_data["detailed_results"][test]
 
         for _i, (b_result, t_result) in enumerate(
-            zip(baseline_results, test_results, strict=False)
+            zip(baseline_results, test_results, strict=True)
         ):
             csv_data.append(
                 {

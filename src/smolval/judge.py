@@ -268,7 +268,7 @@ class LLMJudge:
         # Calculate weighted overall score
         overall_score = sum(
             score.score * criterion.weight 
-            for score, criterion in zip(scores, self.criteria, strict=False)
+            for score, criterion in zip(scores, self.criteria, strict=True)
         )
         
         # Generate summary
