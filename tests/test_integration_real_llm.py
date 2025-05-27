@@ -87,7 +87,11 @@ class TestRealLLMIntegration:
             mcp_servers=[
                 MCPServerConfig(
                     name="filesystem",
-                    command=["npx", "@modelcontextprotocol/server-filesystem", str(temp_test_files)],
+                    command=[
+                        "npx",
+                        "@modelcontextprotocol/server-filesystem",
+                        str(temp_test_files),
+                    ],
                     env={},
                 )
             ],
@@ -106,7 +110,7 @@ class TestRealLLMIntegration:
             agent = Agent(config, llm_client, mcp_manager)
 
             # Test with a filesystem task using the real MCP server
-            prompt = f"Please list the files in the directory and read the contents of test.txt. Tell me what you find."
+            prompt = "Please list the files in the directory and read the contents of test.txt. Tell me what you find."
             result = await agent.run(prompt)
 
             # Verify the agent completed the task

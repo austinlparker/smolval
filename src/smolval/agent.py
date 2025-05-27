@@ -65,12 +65,15 @@ class Agent:
             if self.config.evaluation.timeout_seconds > 0:
                 return await asyncio.wait_for(
                     self._run_agent_loop(prompt, progress_callback),
-                    timeout=self.config.evaluation.timeout_seconds
+                    timeout=self.config.evaluation.timeout_seconds,
                 )
             else:
                 return await self._run_agent_loop(prompt, progress_callback)
-        except asyncio.TimeoutError:
-            logger.error("Agent execution timed out after %d seconds", self.config.evaluation.timeout_seconds)
+        except TimeoutError:
+            logger.error(
+                "Agent execution timed out after %d seconds",
+                self.config.evaluation.timeout_seconds,
+            )
             return AgentResult(
                 success=False,
                 final_answer="",
