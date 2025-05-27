@@ -1,0 +1,23 @@
+Database Server Evaluation
+
+Test the database MCP server capabilities:
+
+1. List all available tables in the database to understand the schema
+2. Describe the structure of the "customers" table including column names and types
+3. Execute a simple SELECT query to retrieve the first 5 customers
+4. Perform a JOIN query between customers and orders tables
+5. Execute an aggregation query to count orders by status
+6. Test a more complex query with WHERE clauses and GROUP BY
+7. Try to execute an invalid SQL statement to test error handling
+8. Attempt a write operation (INSERT/UPDATE) to verify read-only enforcement
+
+Success criteria:
+- Successfully lists database schema information
+- Executes SELECT queries and returns properly formatted results
+- Handles JOIN operations between multiple tables
+- Performs aggregations (COUNT, SUM, etc.) correctly
+- Returns meaningful error messages for invalid SQL
+- Properly prevents write operations if the server is read-only
+- Query execution times are reasonable
+
+This evaluation tests SQL query capabilities, schema introspection, and security controls.

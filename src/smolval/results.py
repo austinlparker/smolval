@@ -121,7 +121,9 @@ class ResultsFormatter:
             result = result_item["result"]
             csv_data.append(
                 {
-                    "prompt_file": result_item["prompt_file"],
+                    "prompt_file": result_item.get("metadata", {}).get(
+                        "prompt_file", ""
+                    ),
                     "success": result["success"],
                     "final_answer": result["final_answer"]
                     .replace("\n", " ")
@@ -546,7 +548,6 @@ class ResultsFormatter:
         result = result_data["result"]
         metadata = result_data.get("metadata", {})
         metrics = self._extract_performance_metrics(result.get("steps", []))
-
         # Load the interactive HTML template from external file
         template = self.jinja_env.get_template("single_result.html")
 

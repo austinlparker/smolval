@@ -1110,7 +1110,7 @@ def _print_comparison_summary(analysis: dict) -> None:
     click.echo("💎 TOKEN EFFICIENCY:")
     baseline_tokens = analysis["total_token_usage"][baseline]
     test_tokens = analysis["total_token_usage"][test]
-    if baseline_tokens > 0 or test_tokens > 0:
+    if (baseline_tokens and baseline_tokens > 0) or (test_tokens and test_tokens > 0):
         click.echo(
             f"  {baseline}: {baseline_tokens:,} tokens"
             if baseline_tokens

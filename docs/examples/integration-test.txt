@@ -1,0 +1,24 @@
+Comprehensive integration test combining multiple MCP server capabilities:
+
+1. Use the filesystem server to read a configuration file that contains a list of URLs
+2. Use the web fetch server to download content from each URL in the configuration
+3. Analyze the downloaded content and extract key information (titles, word counts, etc.)
+4. Use the filesystem server to create a summary report file with the analysis results
+5. If database server is available, store the results in a database table
+6. Create a final report that combines file operations, web content analysis, and data storage
+
+Multi-server coordination test:
+1. Read project structure using filesystem server
+2. Fetch documentation from project website using fetch server
+3. Query database for related project metrics (if available)
+4. Generate a comprehensive project analysis report
+5. Save the report to multiple formats (JSON, markdown, CSV)
+
+Success criteria:
+- Data flows correctly between different MCP servers
+- Each server type contributes its specialized functionality
+- Error handling works when one server fails while others continue
+- Final output integrates information from all available servers
+- Report generation completes successfully with properly formatted data
+- All operations coordinate smoothly without conflicts or resource issues
+- The evaluation demonstrates practical real-world usage patterns

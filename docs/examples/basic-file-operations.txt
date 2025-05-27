@@ -1,0 +1,14 @@
+Test basic file system operations to verify MCP filesystem server functionality:
+
+1. List all files and directories in the current directory
+2. Check if there is a README.md file and read its contents if it exists
+3. Create a temporary test file called "smolval-test.txt" with the content "This is a test file created by smolval"
+4. Verify the file was created by listing the directory again
+5. Read the contents of the test file to confirm it contains the expected text
+6. Clean up by deleting the test file
+
+Success criteria:
+- Directory listing shows file structure correctly
+- File creation and deletion operations work without errors
+- File content reading returns accurate text
+- All operations complete within 30 seconds

@@ -1,0 +1,21 @@
+Test database query capabilities to verify MCP database server functionality:
+
+1. List all available tables in the database
+2. Describe the schema of the "customers" table including column names and types
+3. Execute a simple SELECT query to retrieve the first 5 customers
+4. Perform a JOIN query between customers and orders tables to show customer order history
+5. Execute an aggregation query to count the total number of orders by status
+6. Test a complex query with WHERE clauses, GROUP BY, and ORDER BY
+7. Try executing an invalid SQL query to test error handling
+8. Attempt a write operation (INSERT/UPDATE) to verify it's properly rejected for read-only servers
+
+Success criteria:
+- Table listing shows complete database schema
+- Column information is accurate and properly formatted
+- Simple SELECT queries return expected data structures
+- JOIN operations work correctly across related tables
+- Aggregation functions (COUNT, SUM, AVG) return proper results
+- Complex queries with multiple clauses execute successfully
+- Invalid SQL returns helpful error messages
+- Write operations are rejected with appropriate security messages
+- All queries complete within 10 seconds
