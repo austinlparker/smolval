@@ -245,6 +245,10 @@
         .provider-result {
             padding: 1.5rem;
             position: relative;
+            min-width: 0;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
         }
 
         .provider-result:first-child {
@@ -261,6 +265,8 @@
         .provider-name {
             font-size: 1.2rem;
             font-weight: 700;
+            word-wrap: break-word;
+            overflow-wrap: break-word;
         }
 
         .provider-name.baseline {
@@ -328,6 +334,7 @@
             padding: 1rem;
             max-height: 200px;
             overflow-y: auto;
+            overflow-x: hidden;
         }
 
         .final-answer h4 {
@@ -340,6 +347,9 @@
             white-space: pre-wrap;
             line-height: 1.5;
             font-size: 0.9rem;
+            word-wrap: break-word;
+            overflow-wrap: break-word;
+            hyphens: auto;
         }
 
         .error-section {
@@ -348,6 +358,8 @@
             border-radius: 8px;
             padding: 1rem;
             margin-bottom: 1.5rem;
+            word-wrap: break-word;
+            overflow-wrap: break-word;
         }
 
         .error-section h4 {
@@ -419,6 +431,8 @@
         .step-content {
             font-size: 0.85rem;
             color: var(--neutral-700);
+            word-wrap: break-word;
+            overflow-wrap: break-word;
         }
 
         .step-thought {
@@ -427,6 +441,8 @@
             border-radius: 6px;
             margin-bottom: 0.5rem;
             border-left: 3px solid var(--info);
+            word-wrap: break-word;
+            overflow-wrap: break-word;
         }
 
         .step-action {
@@ -435,6 +451,35 @@
             border-radius: 6px;
             margin-bottom: 0.5rem;
             border-left: 3px solid var(--warning);
+            word-wrap: break-word;
+            overflow-wrap: break-word;
+        }
+
+        .step-action-input {
+            background: var(--neutral-50);
+            padding: 0.75rem;
+            border-radius: 6px;
+            margin-bottom: 0.5rem;
+            border-left: 3px solid var(--neutral-400);
+            word-wrap: break-word;
+            overflow-wrap: break-word;
+        }
+
+        .action-input-json {
+            background: var(--neutral-100);
+            border: 1px solid var(--neutral-200);
+            border-radius: 4px;
+            padding: 0.5rem;
+            margin-top: 0.5rem;
+            font-family: 'SF Mono', Monaco, monospace;
+            font-size: 0.8rem;
+            overflow-x: auto;
+            overflow-y: hidden;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            overflow-wrap: break-word;
+            color: var(--neutral-700);
+            max-width: 100%;
         }
 
         .step-observation {
@@ -442,6 +487,8 @@
             padding: 0.75rem;
             border-radius: 6px;
             border-left: 3px solid var(--success);
+            word-wrap: break-word;
+            overflow-wrap: break-word;
         }
 
         .observation-content {
@@ -474,6 +521,8 @@
             font-family: 'SF Mono', Monaco, monospace;
             font-size: 0.85rem;
             line-height: 1.4;
+            word-wrap: break-word;
+            overflow-wrap: break-word;
         }
 
         @media (max-width: 1024px) {
@@ -686,6 +735,12 @@
                                             <strong>⚡ Action:</strong> {{ step.action }}
                                         </div>
                                         {% endif %}
+                                        {% if step.action_input %}
+                                        <div class="step-action-input">
+                                            <strong>🔧 Parameters:</strong>
+                                            <pre class="action-input-json">{{ step.action_input|tojson(indent=2) }}</pre>
+                                        </div>
+                                        {% endif %}
                                         {% if step.observation %}
                                         <div class="step-observation">
                                             <strong>👁️ Observation:</strong>
@@ -781,6 +836,12 @@
                                         {% if step.action %}
                                         <div class="step-action">
                                             <strong>⚡ Action:</strong> {{ step.action }}
+                                        </div>
+                                        {% endif %}
+                                        {% if step.action_input %}
+                                        <div class="step-action-input">
+                                            <strong>🔧 Parameters:</strong>
+                                            <pre class="action-input-json">{{ step.action_input|tojson(indent=2) }}</pre>
                                         </div>
                                         {% endif %}
                                         {% if step.observation %}

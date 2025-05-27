@@ -87,6 +87,7 @@ class MCPClientManager:
 
             # For some servers, we need to suppress both stdout and stderr
             # MCP protocol uses stdio
+            
             server_params = StdioServerParameters(
                 command=command, args=args, env=env_vars
             )
@@ -99,31 +100,23 @@ class MCPClientManager:
                 stdio_transport = await self.exit_stack.enter_async_context(
                     stdio_client(server_params)
                 )
-                read, write = stdio_transport
-
-                logger.debug("Got stdio transport for %s", config.name)
-
-                session = await self.exit_stack.enter_async_context(
-                    ClientSession(read, write)
-                )
-                logger.debug("Created client session for %s", config.name)
-
-                await session.initialize()
-                logger.debug("Initialized session for %s", config.name)
             else:
-                stderr_capture = StringIO()
+                # Use devnull to suppress stderr instead of printing to console
+                devnull = self.exit_stack.enter_context(open(os.devnull, 'w'))
+                stdio_transport = await self.exit_stack.enter_async_context(
+                    stdio_client(server_params, errlog=devnull)
+                )
 
-                # Use proper async context manager pattern from official example
-                with redirect_stderr(stderr_capture):
-                    stdio_transport = await self.exit_stack.enter_async_context(
-                        stdio_client(server_params)
-                    )
-                    read, write = stdio_transport
+            read, write = stdio_transport
+            logger.debug("Got stdio transport for %s", config.name)
 
-                    session = await self.exit_stack.enter_async_context(
-                        ClientSession(read, write)
-                    )
-                    await session.initialize()
+            session = await self.exit_stack.enter_async_context(
+                ClientSession(read, write)
+            )
+            logger.debug("Created client session for %s", config.name)
+
+            await session.initialize()
+            logger.debug("Initialized session for %s", config.name)
 
             # Store the session for tool execution
             self.clients[config.name] = {"session": session}
