@@ -1,0 +1,856 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🔄 Provider Comparison: {{ baseline }} vs {{ test }}</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --primary: #3b82f6;
+            --primary-light: #dbeafe;
+            --success: #10b981;
+            --success-light: #d1fae5;
+            --error: #ef4444;
+            --error-light: #fee2e2;
+            --warning: #f59e0b;
+            --warning-light: #fef3c7;
+            --info: #6366f1;
+            --info-light: #e0e7ff;
+            --neutral-50: #f9fafb;
+            --neutral-100: #f3f4f6;
+            --neutral-200: #e5e7eb;
+            --neutral-300: #d1d5db;
+            --neutral-400: #9ca3af;
+            --neutral-500: #6b7280;
+            --neutral-600: #4b5563;
+            --neutral-700: #374151;
+            --neutral-800: #1f2937;
+            --neutral-900: #111827;
+            --baseline-color: #3b82f6;
+            --test-color: #f59e0b;
+            --shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+            --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+        }
+
+        body {
+            font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            line-height: 1.6;
+            color: var(--neutral-800);
+            background: var(--neutral-50);
+            padding: 1rem;
+        }
+
+        .container {
+            max-width: 1600px;
+            margin: 0 auto;
+        }
+
+        .header {
+            background: linear-gradient(135deg, var(--primary) 0%, var(--info) 100%);
+            color: white;
+            padding: 2rem;
+            border-radius: 12px;
+            margin-bottom: 2rem;
+            text-align: center;
+            box-shadow: var(--shadow-lg);
+        }
+
+        .header h1 {
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+        }
+
+        .header .subtitle {
+            font-size: 1.2rem;
+            opacity: 0.9;
+        }
+
+        .winners-section {
+            background: white;
+            border-radius: 12px;
+            padding: 2rem;
+            margin-bottom: 2rem;
+            box-shadow: var(--shadow);
+        }
+
+        .winners-title {
+            font-size: 1.5rem;
+            font-weight: 600;
+            margin-bottom: 1.5rem;
+            text-align: center;
+            color: var(--neutral-800);
+        }
+
+        .winners-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+        }
+
+        .winner-card {
+            background: var(--neutral-50);
+            border: 2px solid var(--neutral-200);
+            border-radius: 12px;
+            padding: 1.5rem;
+            text-align: center;
+            transition: all 0.3s ease;
+        }
+
+        .winner-card:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow);
+        }
+
+        .winner-card.baseline-wins {
+            border-color: var(--baseline-color);
+            background: linear-gradient(135deg, var(--primary-light), white);
+        }
+
+        .winner-card.test-wins {
+            border-color: var(--test-color);
+            background: linear-gradient(135deg, var(--warning-light), white);
+        }
+
+        .winner-card.tie {
+            border-color: var(--neutral-400);
+            background: linear-gradient(135deg, var(--neutral-100), white);
+        }
+
+        .winner-metric {
+            font-size: 0.9rem;
+            color: var(--neutral-600);
+            margin-bottom: 0.5rem;
+            font-weight: 500;
+        }
+
+        .winner-name {
+            font-size: 1.2rem;
+            font-weight: 700;
+            color: var(--neutral-800);
+        }
+
+        .stats-section {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 2rem;
+            margin-bottom: 2rem;
+        }
+
+        .provider-stats {
+            background: white;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: var(--shadow);
+        }
+
+        .provider-header {
+            padding: 1.5rem;
+            font-weight: 700;
+            font-size: 1.3rem;
+            text-align: center;
+        }
+
+        .provider-header.baseline {
+            background: var(--baseline-color);
+            color: white;
+        }
+
+        .provider-header.test {
+            background: var(--test-color);
+            color: white;
+        }
+
+        .provider-metrics {
+            padding: 1.5rem;
+        }
+
+        .metric-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.75rem 0;
+            border-bottom: 1px solid var(--neutral-200);
+        }
+
+        .metric-row:last-child {
+            border-bottom: none;
+        }
+
+        .metric-label {
+            font-weight: 500;
+            color: var(--neutral-700);
+        }
+
+        .metric-value {
+            font-weight: 600;
+            color: var(--neutral-900);
+        }
+
+        .results-section {
+            margin-bottom: 2rem;
+        }
+
+        .section-title {
+            font-size: 2rem;
+            font-weight: 700;
+            text-align: center;
+            margin-bottom: 2rem;
+            color: var(--neutral-800);
+        }
+
+        .prompt-comparison {
+            background: white;
+            border-radius: 12px;
+            margin-bottom: 2rem;
+            overflow: hidden;
+            box-shadow: var(--shadow);
+        }
+
+        .prompt-header {
+            background: var(--neutral-100);
+            padding: 1.5rem;
+            border-bottom: 1px solid var(--neutral-200);
+        }
+
+        .prompt-title {
+            font-size: 1.3rem;
+            font-weight: 600;
+            color: var(--neutral-800);
+            margin-bottom: 0.5rem;
+        }
+
+        .prompt-text {
+            background: var(--neutral-50);
+            padding: 1rem;
+            border-radius: 8px;
+            font-family: 'SF Mono', Monaco, monospace;
+            font-size: 0.9rem;
+            color: var(--neutral-700);
+            border: 1px solid var(--neutral-200);
+        }
+
+        .comparison-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            min-height: 600px;
+        }
+
+        .provider-result {
+            padding: 1.5rem;
+            position: relative;
+        }
+
+        .provider-result:first-child {
+            border-right: 1px solid var(--neutral-200);
+        }
+
+        .provider-result-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 1.5rem;
+        }
+
+        .provider-name {
+            font-size: 1.2rem;
+            font-weight: 700;
+        }
+
+        .provider-name.baseline {
+            color: var(--baseline-color);
+        }
+
+        .provider-name.test {
+            color: var(--test-color);
+        }
+
+        .status-badge {
+            padding: 0.5rem 1rem;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            font-weight: 600;
+        }
+
+        .status-success {
+            background: var(--success-light);
+            color: var(--success);
+        }
+
+        .status-error {
+            background: var(--error-light);
+            color: var(--error);
+        }
+
+        .result-stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .stat-card {
+            background: var(--neutral-50);
+            padding: 1rem;
+            border-radius: 8px;
+            text-align: center;
+            border: 1px solid var(--neutral-200);
+        }
+
+        .stat-value {
+            font-size: 1.1rem;
+            font-weight: 700;
+            color: var(--neutral-900);
+            margin-bottom: 0.25rem;
+        }
+
+        .stat-label {
+            font-size: 0.8rem;
+            color: var(--neutral-600);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .final-answer-section {
+            margin-bottom: 1.5rem;
+        }
+
+        .final-answer {
+            background: var(--success-light);
+            border: 1px solid var(--success);
+            border-radius: 8px;
+            padding: 1rem;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+
+        .final-answer h4 {
+            color: var(--success);
+            margin-bottom: 0.5rem;
+            font-size: 1rem;
+        }
+
+        .answer-text {
+            white-space: pre-wrap;
+            line-height: 1.5;
+            font-size: 0.9rem;
+        }
+
+        .error-section {
+            background: var(--error-light);
+            border: 1px solid var(--error);
+            border-radius: 8px;
+            padding: 1rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .error-section h4 {
+            color: var(--error);
+            margin-bottom: 0.5rem;
+        }
+
+        .steps-section {
+            background: var(--neutral-50);
+            border-radius: 8px;
+            border: 1px solid var(--neutral-200);
+        }
+
+        .steps-header {
+            padding: 1rem;
+            background: var(--neutral-100);
+            border-bottom: 1px solid var(--neutral-200);
+            cursor: pointer;
+            user-select: none;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .steps-header:hover {
+            background: var(--neutral-200);
+        }
+
+        .steps-header h4 {
+            font-size: 1rem;
+            color: var(--neutral-800);
+        }
+
+        .expand-icon {
+            transition: transform 0.3s ease;
+            color: var(--neutral-600);
+        }
+
+        .steps-section.expanded .expand-icon {
+            transform: rotate(180deg);
+        }
+
+        .steps-content {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease;
+        }
+
+        .steps-section.expanded .steps-content {
+            max-height: none;
+            overflow: visible;
+        }
+
+        .step-item {
+            padding: 1rem;
+            border-bottom: 1px solid var(--neutral-200);
+        }
+
+        .step-item:last-child {
+            border-bottom: none;
+        }
+
+        .step-header {
+            font-weight: 600;
+            color: var(--neutral-800);
+            margin-bottom: 0.5rem;
+        }
+
+        .step-content {
+            font-size: 0.85rem;
+            color: var(--neutral-700);
+        }
+
+        .step-thought {
+            background: var(--info-light);
+            padding: 0.75rem;
+            border-radius: 6px;
+            margin-bottom: 0.5rem;
+            border-left: 3px solid var(--info);
+        }
+
+        .step-action {
+            background: var(--warning-light);
+            padding: 0.75rem;
+            border-radius: 6px;
+            margin-bottom: 0.5rem;
+            border-left: 3px solid var(--warning);
+        }
+
+        .step-observation {
+            background: var(--success-light);
+            padding: 0.75rem;
+            border-radius: 6px;
+            border-left: 3px solid var(--success);
+        }
+
+        .observation-content {
+            position: relative;
+        }
+
+        .observation-content.collapsed {
+            max-height: 200px;
+            overflow: hidden;
+        }
+
+        .observation-toggle {
+            background: var(--primary);
+            color: white;
+            border: none;
+            padding: 0.25rem 0.75rem;
+            border-radius: 4px;
+            font-size: 0.8rem;
+            cursor: pointer;
+            margin-top: 0.5rem;
+            transition: background-color 0.2s ease;
+        }
+
+        .observation-toggle:hover {
+            background: var(--info);
+        }
+
+        .observation-content {
+            white-space: pre-wrap;
+            font-family: 'SF Mono', Monaco, monospace;
+            font-size: 0.85rem;
+            line-height: 1.4;
+        }
+
+        @media (max-width: 1024px) {
+            .comparison-grid,
+            .stats-section {
+                grid-template-columns: 1fr;
+            }
+
+            .provider-result:first-child {
+                border-right: none;
+                border-bottom: 1px solid var(--neutral-200);
+            }
+        }
+
+        @media (max-width: 768px) {
+            body {
+                padding: 0.5rem;
+            }
+
+            .header {
+                padding: 1.5rem;
+            }
+
+            .header h1 {
+                font-size: 2rem;
+            }
+
+            .winners-grid {
+                grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+                gap: 0.75rem;
+            }
+
+            .result-stats {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🔄 Provider Comparison</h1>
+            <div class="subtitle">{{ baseline }} vs {{ test }}</div>
+            <p style="margin-top: 1rem; opacity: 0.8;">{{ analysis.total_prompts }} prompts evaluated • {{ timestamp }}</p>
+        </div>
+
+        <div class="winners-section">
+            <div class="winners-title">🏆 Overall Winners</div>
+            <div class="winners-grid">
+                <div class="winner-card {{ 'tie' if analysis.winner.success_rate == 'tie' else ('baseline-wins' if analysis.winner.success_rate == baseline else 'test-wins') }}">
+                    <div class="winner-metric">Success Rate</div>
+                    <div class="winner-name">{{ '🤝 Tie' if analysis.winner.success_rate == 'tie' else ('🏆 ' + analysis.winner.success_rate) }}</div>
+                </div>
+                <div class="winner-card {{ 'tie' if analysis.winner.speed == 'tie' else ('baseline-wins' if analysis.winner.speed == baseline else 'test-wins') }}">
+                    <div class="winner-metric">Speed</div>
+                    <div class="winner-name">{{ '🤝 Tie' if analysis.winner.speed == 'tie' else ('⚡ ' + analysis.winner.speed) }}</div>
+                </div>
+                <div class="winner-card {{ 'tie' if analysis.winner.efficiency == 'tie' else ('baseline-wins' if analysis.winner.efficiency == baseline else 'test-wins') }}">
+                    <div class="winner-metric">Efficiency</div>
+                    <div class="winner-name">{{ '🤝 Tie' if analysis.winner.efficiency == 'tie' else ('🎯 ' + analysis.winner.efficiency) }}</div>
+                </div>
+                {% if analysis.winner.get('reliability') %}
+                <div class="winner-card {{ 'tie' if analysis.winner.reliability == 'tie' else ('baseline-wins' if analysis.winner.reliability == baseline else 'test-wins') }}">
+                    <div class="winner-metric">Reliability</div>
+                    <div class="winner-name">{{ '🤝 Tie' if analysis.winner.reliability == 'tie' else ('🔒 ' + analysis.winner.reliability) }}</div>
+                </div>
+                {% endif %}
+                {% if analysis.winner.get('token_efficiency') %}
+                <div class="winner-card {{ 'tie' if analysis.winner.token_efficiency == 'tie' else ('baseline-wins' if analysis.winner.token_efficiency == baseline else 'test-wins') }}">
+                    <div class="winner-metric">Token Efficiency</div>
+                    <div class="winner-name">{{ '🤝 Tie' if analysis.winner.token_efficiency == 'tie' else ('💎 ' + analysis.winner.token_efficiency) }}</div>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="stats-section">
+            <div class="provider-stats">
+                <div class="provider-header baseline">{{ baseline }}</div>
+                <div class="provider-metrics">
+                    <div class="metric-row">
+                        <span class="metric-label">Success Rate</span>
+                        <span class="metric-value">{{ analysis.success_counts[baseline] }}/{{ analysis.total_prompts }} ({{ "%.1f"|format(analysis.success_rates[baseline] * 100) }}%)</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Avg Execution Time</span>
+                        <span class="metric-value">{{ "%.2f"|format(analysis.average_execution_times[baseline]) }}s</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Avg Iterations</span>
+                        <span class="metric-value">{{ "%.1f"|format(analysis.average_iterations[baseline]) }}</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Failed Tool Calls</span>
+                        <span class="metric-value">{{ analysis.total_failed_tool_calls[baseline] or 0 }}</span>
+                    </div>
+                    {% if analysis.total_token_usage and analysis.total_token_usage[baseline] %}
+                    <div class="metric-row">
+                        <span class="metric-label">Total Tokens</span>
+                        <span class="metric-value">{{ "{:,}".format(analysis.total_token_usage[baseline]) }}</span>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <div class="provider-stats">
+                <div class="provider-header test">{{ test }}</div>
+                <div class="provider-metrics">
+                    <div class="metric-row">
+                        <span class="metric-label">Success Rate</span>
+                        <span class="metric-value">{{ analysis.success_counts[test] }}/{{ analysis.total_prompts }} ({{ "%.1f"|format(analysis.success_rates[test] * 100) }}%)</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Avg Execution Time</span>
+                        <span class="metric-value">{{ "%.2f"|format(analysis.average_execution_times[test]) }}s</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Avg Iterations</span>
+                        <span class="metric-value">{{ "%.1f"|format(analysis.average_iterations[test]) }}</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Failed Tool Calls</span>
+                        <span class="metric-value">{{ analysis.total_failed_tool_calls[test] or 0 }}</span>
+                    </div>
+                    {% if analysis.total_token_usage and analysis.total_token_usage[test] %}
+                    <div class="metric-row">
+                        <span class="metric-label">Total Tokens</span>
+                        <span class="metric-value">{{ "{:,}".format(analysis.total_token_usage[test]) }}</span>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <div class="results-section">
+            <h2 class="section-title">📊 Detailed Results by Prompt</h2>
+
+            {% for b_result, t_result in zip(comparison_data.detailed_results[baseline], comparison_data.detailed_results[test]) %}
+            <div class="prompt-comparison">
+                <div class="prompt-header">
+                    <div class="prompt-title">{{ b_result.prompt_file }}</div>
+                    {% if b_result.get('prompt') %}
+                    <div class="prompt-text">{{ b_result.prompt }}</div>
+                    {% endif %}
+                </div>
+
+                <div class="comparison-grid">
+                    <!-- Baseline Provider Result -->
+                    <div class="provider-result">
+                        <div class="provider-result-header">
+                            <div class="provider-name baseline">{{ baseline }}</div>
+                            <div class="status-badge {{ 'status-success' if b_result.success else 'status-error' }}">
+                                {{ '✅ Success' if b_result.success else '❌ Failed' }}
+                            </div>
+                        </div>
+
+                        <div class="result-stats">
+                            <div class="stat-card">
+                                <div class="stat-value">{{ "%.2f"|format(b_result.execution_time) }}s</div>
+                                <div class="stat-label">Time</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-value">{{ b_result.iterations }}</div>
+                                <div class="stat-label">Iterations</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-value">{{ b_result.failed_tool_calls or 0 }}</div>
+                                <div class="stat-label">Failed Tools</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-value">{{ b_result.steps }}</div>
+                                <div class="stat-label">Steps</div>
+                            </div>
+                        </div>
+
+                        {% if b_result.error %}
+                        <div class="error-section">
+                            <h4>❌ Error</h4>
+                            <div>{{ b_result.error }}</div>
+                        </div>
+                        {% endif %}
+
+                        {% if b_result.final_answer %}
+                        <div class="final-answer-section">
+                            <div class="final-answer">
+                                <h4>🎯 Final Answer</h4>
+                                <div class="answer-text">{{ b_result.final_answer | markdown | safe }}</div>
+                            </div>
+                        </div>
+                        {% endif %}
+
+                        {% if b_result.detailed_steps %}
+                        <div class="steps-section" onclick="toggleSteps(this)">
+                            <div class="steps-header">
+                                <h4>📝 Execution Steps ({{ b_result.detailed_steps|length }})</h4>
+                                <div class="expand-icon">▼</div>
+                            </div>
+                            <div class="steps-content">
+                                {% for step in b_result.detailed_steps %}
+                                <div class="step-item">
+                                    <div class="step-header">Step {{ loop.index }}: {{ step.action or 'Thinking' }}</div>
+                                    <div class="step-content">
+                                        {% if step.thought %}
+                                        <div class="step-thought">
+                                            <strong>💭 Thought:</strong> {{ step.thought }}
+                                        </div>
+                                        {% endif %}
+                                        {% if step.action %}
+                                        <div class="step-action">
+                                            <strong>⚡ Action:</strong> {{ step.action }}
+                                        </div>
+                                        {% endif %}
+                                        {% if step.observation %}
+                                        <div class="step-observation">
+                                            <strong>👁️ Observation:</strong>
+                                            {% set lines = step.observation.split('\n') %}
+                                            {% if lines|length > 10 %}
+                                            <div class="observation-content collapsed" id="obs-{{ loop.index0 }}-{{ loop.index }}">
+                                                {{ lines[:10]|join('\n') }}
+                                                <div style="color: var(--neutral-500); font-style: italic; margin-top: 0.5rem;">
+                                                    ... ({{ lines|length - 10 }} more lines)
+                                                </div>
+                                            </div>
+                                            <button class="observation-toggle" onclick="toggleObservation('obs-{{ loop.index0 }}-{{ loop.index }}')">
+                                                Show Full Output
+                                            </button>
+                                            <div class="observation-content" id="obs-full-{{ loop.index0 }}-{{ loop.index }}" style="display: none;">
+                                                {{ step.observation }}
+                                            </div>
+                                            {% else %}
+                                            <div class="observation-content">
+                                                {{ step.observation }}
+                                            </div>
+                                            {% endif %}
+                                        </div>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                        {% endif %}
+                    </div>
+
+                    <!-- Test Provider Result -->
+                    <div class="provider-result">
+                        <div class="provider-result-header">
+                            <div class="provider-name test">{{ test }}</div>
+                            <div class="status-badge {{ 'status-success' if t_result.success else 'status-error' }}">
+                                {{ '✅ Success' if t_result.success else '❌ Failed' }}
+                            </div>
+                        </div>
+
+                        <div class="result-stats">
+                            <div class="stat-card">
+                                <div class="stat-value">{{ "%.2f"|format(t_result.execution_time) }}s</div>
+                                <div class="stat-label">Time</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-value">{{ t_result.iterations }}</div>
+                                <div class="stat-label">Iterations</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-value">{{ t_result.failed_tool_calls or 0 }}</div>
+                                <div class="stat-label">Failed Tools</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-value">{{ t_result.steps }}</div>
+                                <div class="stat-label">Steps</div>
+                            </div>
+                        </div>
+
+                        {% if t_result.error %}
+                        <div class="error-section">
+                            <h4>❌ Error</h4>
+                            <div>{{ t_result.error }}</div>
+                        </div>
+                        {% endif %}
+
+                        {% if t_result.final_answer %}
+                        <div class="final-answer-section">
+                            <div class="final-answer">
+                                <h4>🎯 Final Answer</h4>
+                                <div class="answer-text">{{ t_result.final_answer | markdown | safe }}</div>
+                            </div>
+                        </div>
+                        {% endif %}
+
+                        {% if t_result.detailed_steps %}
+                        <div class="steps-section" onclick="toggleSteps(this)">
+                            <div class="steps-header">
+                                <h4>📝 Execution Steps ({{ t_result.detailed_steps|length }})</h4>
+                                <div class="expand-icon">▼</div>
+                            </div>
+                            <div class="steps-content">
+                                {% for step in t_result.detailed_steps %}
+                                <div class="step-item">
+                                    <div class="step-header">Step {{ loop.index }}: {{ step.action or 'Thinking' }}</div>
+                                    <div class="step-content">
+                                        {% if step.thought %}
+                                        <div class="step-thought">
+                                            <strong>💭 Thought:</strong> {{ step.thought }}
+                                        </div>
+                                        {% endif %}
+                                        {% if step.action %}
+                                        <div class="step-action">
+                                            <strong>⚡ Action:</strong> {{ step.action }}
+                                        </div>
+                                        {% endif %}
+                                        {% if step.observation %}
+                                        <div class="step-observation">
+                                            <strong>👁️ Observation:</strong>
+                                            {% set lines = step.observation.split('\n') %}
+                                            {% if lines|length > 10 %}
+                                            <div class="observation-content collapsed" id="obs-{{ loop.index0 }}-{{ loop.index }}">
+                                                {{ lines[:10]|join('\n') }}
+                                                <div style="color: var(--neutral-500); font-style: italic; margin-top: 0.5rem;">
+                                                    ... ({{ lines|length - 10 }} more lines)
+                                                </div>
+                                            </div>
+                                            <button class="observation-toggle" onclick="toggleObservation('obs-{{ loop.index0 }}-{{ loop.index }}')">
+                                                Show Full Output
+                                            </button>
+                                            <div class="observation-content" id="obs-full-{{ loop.index0 }}-{{ loop.index }}" style="display: none;">
+                                                {{ step.observation }}
+                                            </div>
+                                            {% else %}
+                                            <div class="observation-content">
+                                                {{ step.observation }}
+                                            </div>
+                                            {% endif %}
+                                        </div>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <script>
+        function toggleSteps(element) {
+            element.classList.toggle('expanded');
+        }
+
+        function toggleObservation(obsId) {
+            const collapsedDiv = document.getElementById(obsId);
+            const fullDiv = document.getElementById(obsId.replace('obs-', 'obs-full-'));
+            const button = collapsedDiv.parentElement.querySelector('.observation-toggle');
+            
+            if (collapsedDiv.style.display === 'none') {
+                // Show collapsed version
+                collapsedDiv.style.display = 'block';
+                fullDiv.style.display = 'none';
+                button.textContent = 'Show Full Output';
+            } else {
+                // Show full version
+                collapsedDiv.style.display = 'none';
+                fullDiv.style.display = 'block';
+                button.textContent = 'Show Less';
+            }
+        }
+
+        // Auto-expand steps sections that have errors or are particularly interesting
+        document.addEventListener('DOMContentLoaded', function() {
+            // Auto-expand first result for quick viewing
+            const firstStepsSection = document.querySelector('.steps-section');
+            if (firstStepsSection) {
+                firstStepsSection.classList.add('expanded');
+            }
+        });
+    </script>
+</body>
+</html>

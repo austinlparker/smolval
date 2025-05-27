@@ -122,3 +122,68 @@ class TestConfig:
 
         with pytest.raises(FileNotFoundError):
             Config.from_yaml(non_existent_path)
+
+    def test_gemini_provider_validation(self) -> None:
+        """Test Gemini provider is valid."""
+        config_dict = {
+            "mcp_servers": [
+                {
+                    "name": "test",
+                    "command": ["echo"],
+                    "env": {},
+                }
+            ],
+            "llm": {
+                "provider": "gemini",
+                "model": "gemini-2.0-flash",
+                "api_key": "test_api_key",
+            },
+            "evaluation": {},
+        }
+
+        config = Config.from_dict(config_dict)
+        assert config.llm.provider == "gemini"
+        assert config.llm.model == "gemini-2.0-flash"
+        assert config.llm.api_key == "test_api_key"
+
+    def test_gemini_requires_api_key(self) -> None:
+        """Test Gemini provider requires API key."""
+        config_dict = {
+            "mcp_servers": [
+                {
+                    "name": "test",
+                    "command": ["echo"],
+                    "env": {},
+                }
+            ],
+            "llm": {
+                "provider": "gemini",
+                "model": "gemini-2.0-flash",
+                # Missing api_key
+            },
+            "evaluation": {},
+        }
+
+        with pytest.raises(ValueError, match="API key is required for gemini"):
+            Config.from_dict(config_dict)
+
+    def test_invalid_provider_validation(self) -> None:
+        """Test invalid provider is rejected."""
+        config_dict = {
+            "mcp_servers": [
+                {
+                    "name": "test",
+                    "command": ["echo"],
+                    "env": {},
+                }
+            ],
+            "llm": {
+                "provider": "invalid_provider",
+                "model": "test-model",
+                "api_key": "test",
+            },
+            "evaluation": {},
+        }
+
+        with pytest.raises(ValueError, match="Provider must be"):
+            Config.from_dict(config_dict)

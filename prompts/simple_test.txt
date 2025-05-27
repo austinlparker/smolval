@@ -1,0 +1,1 @@
+Please list the files in the current directory and tell me what type of project this is based on the file structure.

@@ -30,9 +30,15 @@ uv run python -m smolval.cli batch prompts/ -c config/custom.yaml -o results/ --
 # Compare servers
 uv run python -m smolval.cli compare --baseline filesystem --test fetch prompts/ --format markdown
 
+# Compare different LLM providers (requires both plugins and API keys)
+uv run python -m smolval.cli compare-providers --baseline-config config/example-anthropic.yaml --test-config config/example-gemini.yaml prompts/ --format markdown
+
 # Use Ollama for local testing (requires ollama running with gemma3:1b-it-qat model)
 # Features Gemma-specific function calling with tool_code blocks
 uv run python -m smolval.cli eval prompts/simple_test.txt -c config/ollama.yaml --format markdown
+
+# Use Google Gemini (requires llm-gemini plugin and GEMINI_API_KEY)
+uv run python -m smolval.cli eval prompts/simple_test.txt -c config/example-gemini.yaml --format markdown
 ```
 
 #### Docker
@@ -54,6 +60,13 @@ docker run --rm \
   --user root \
   -e OPENAI_API_KEY \
   smolval eval prompts/simple_test.txt -c config/openai-gpt4.yaml --format markdown
+
+# Google Gemini:
+docker run --rm \
+  -v /var/run/docker.sock:/var/run/docker.sock \
+  --user root \
+  -e GEMINI_API_KEY \
+  smolval eval prompts/simple_test.txt -c config/example-gemini.yaml --format markdown
 
 # Run without Docker socket (filesystem and fetch servers only)
 docker run --rm \
@@ -110,7 +123,7 @@ This ensures consistent code quality and prevents formatting issues in commits.
 1. **CLI** (`cli.py`) → **Config** (`config.py`) → **Agent** (`agent.py`) workflow
 2. **Agent** orchestrates **LLMClient** + **MCPClientManager** in ReAct loop
 3. **MCPClientManager** (`mcp_client.py`) discovers tools from multiple MCP servers, presents unified interface
-4. **LLMClient** (`llm_client.py`) provides unified interface for Anthropic Claude, OpenAI, and Ollama models with Gemma-specific function calling
+4. **LLMClient** (`llm_client.py`) provides unified interface for Anthropic Claude, OpenAI, Google Gemini, and Ollama models with provider-specific function calling
 5. **ResultsFormatter** (`results.py`) handles multi-format output with Jinja2 templating
 
 ### Key Design Patterns
@@ -128,10 +141,14 @@ The `MCPClientManager` uses proper async context managers with `AsyncExitStack` 
 
 ### Configuration System
 - **YAML-based**: Environment variable expansion with `${VAR}` and `${VAR:-default}` syntax (loads `.env` via python-dotenv)
-- **Default Config**: `config/no-api-keys.yaml` with filesystem, fetch, sqlite servers (Claude 4 Sonnet)
-- **Alternative Configs**: `config/openai-gpt4.yaml` (GPT-4o Mini), `config/filesystem-only.yaml` (Claude 4 Sonnet, filesystem only), `config/ollama.yaml` (Ollama with gemma3:1b-it-qat)
-- **Required Environment**: `ANTHROPIC_API_KEY` or `OPENAI_API_KEY` (not required for Ollama)
+- **Default Config**: `config/example-anthropic.yaml` with filesystem, fetch servers (Claude 4 Sonnet)
+- **Alternative Configs**: 
+  - `config/example-openai.yaml` (GPT-4o models)
+  - `config/example-gemini.yaml` (Google Gemini models) 
+  - `config/example-ollama.yaml` (Ollama with gemma3:1b-it-qat)
+- **Required Environment**: `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, or `GEMINI_API_KEY` (not required for Ollama)
 - **LLM Library**: Uses `datasette llm` with automatic plugin loading for providers
+- **Plugin Requirements**: Install `llm-gemini` for Google Gemini support
 
 ### MCP Server Support
 - **NPM-based servers**: `@modelcontextprotocol/server-filesystem`

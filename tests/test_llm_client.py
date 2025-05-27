@@ -48,6 +48,18 @@ def openai_config():
 
 
 @pytest.fixture
+def gemini_config():
+    """Gemini LLM configuration."""
+    return LLMConfig(
+        provider="gemini",
+        model="gemini-2.0-flash",
+        api_key="test-api-key",
+        max_tokens=1000,
+        temperature=0.7,
+    )
+
+
+@pytest.fixture
 def sample_tools():
     """Sample MCP tools for testing."""
     return [
@@ -385,9 +397,58 @@ And then I'll analyze the results."""
             turn_content = call_args[0][0]
             assert "Tool result (ID: call_1): File contents" in turn_content
 
+    def test_gemini_client_initialization(self, gemini_config):
+        """Test Gemini client initialization."""
+        with patch("llm.get_model") as mock_get_model:
+            mock_model = Mock()
+            mock_conversation = Mock()
+            mock_model.conversation.return_value = mock_conversation
+            mock_get_model.return_value = mock_model
+
+            client = LLMClient(gemini_config)
+
+            assert client.config.provider == "gemini"
+            assert client.config.model == "gemini-2.0-flash"
+            # Verify API key is set
+            assert mock_model.key == "test-api-key"
+
+    @patch("llm.get_model")
+    def test_gemini_chat_request(self, mock_get_model, gemini_config):
+        """Test Gemini chat request."""
+        # Setup mocks
+        mock_model = Mock()
+        mock_conversation = Mock()
+        mock_response = create_mock_response("Hello from Gemini!")
+
+        mock_conversation.prompt.return_value = mock_response
+        mock_model.conversation.return_value = mock_conversation
+        mock_get_model.return_value = mock_model
+
+        client = LLMClient(gemini_config)
+
+        # Test message
+        messages = [
+            LLMMessage(role="system", content="You are a helpful assistant"),
+            LLMMessage(role="user", content="Hello!"),
+        ]
+
+        response = asyncio.run(client.chat(messages))
+
+        # Verify response
+        assert response.content == "Hello from Gemini!"
+        assert response.token_usage is not None
+        assert response.token_usage["total_tokens"] == 15
+
+        # Verify conversation was called with correct parameters
+        mock_conversation.prompt.assert_called_once()
+        call_args = mock_conversation.prompt.call_args
+        assert call_args[1]["temperature"] == 0.7
+        assert call_args[1]["max_tokens"] == 1000
+
     def test_invalid_provider_raises_error(self):
         """Test that invalid provider raises error."""
         with pytest.raises(
-            ValueError, match="Provider must be 'anthropic', 'openai', or 'ollama'"
+            ValueError,
+            match="Provider must be 'anthropic', 'openai', 'ollama', or 'gemini'",
         ):
             LLMConfig(provider="invalid", model="test-model", api_key="test-key")

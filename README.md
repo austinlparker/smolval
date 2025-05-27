@@ -5,7 +5,9 @@ A lightweight MCP server evaluation agent powered by LLM-driven ReAct.
 ## Features
 
 - Evaluate MCP servers with LLM-guided reasoning and tooling.
+- Support for multiple LLM providers: Anthropic Claude, OpenAI, Google Gemini, and Ollama.
 - Batch evaluations and server comparisons.
+- Cross-provider model comparisons.
 - Outputs results in JSON, CSV, Markdown, and HTML.
 
 ## Installation
@@ -37,6 +39,7 @@ smolval eval prompts/example.txt --config config/example-anthropic.yaml --output
 - `smolval eval`: Evaluate a single prompt.
 - `smolval batch`: Run batch evaluations over a directory of prompts.
 - `smolval compare`: Compare two MCP servers across prompts.
+- `smolval compare-providers`: Compare different LLM providers with the same prompts.
 
 Run `smolval --help` for detailed options.
 
@@ -46,7 +49,13 @@ Sample configs:
 ```text
 config/example-anthropic.yaml
 config/example-openai.yaml
+config/example-gemini.yaml
 config/example-ollama.yaml
+```
+
+For Google Gemini, install the LLM plugin:
+```bash
+pip install llm-gemini
 ```
 
 ## Prompts

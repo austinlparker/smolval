@@ -67,6 +67,8 @@ class LLMClient:
                 self.model.key = config.api_key
             elif config.provider == "openai":
                 self.model.key = config.api_key
+            elif config.provider == "gemini":
+                self.model.key = config.api_key
 
         # Initialize conversation
         self.conversation = self.model.conversation()
@@ -112,6 +114,13 @@ class LLMClient:
                 raise RuntimeError("Conversation not initialized")
 
             if self.config.provider == "ollama":
+                response = self.conversation.prompt(
+                    conversation_text,
+                    system=system_prompt,
+                    temperature=self.config.temperature,
+                )
+            elif self.config.provider == "gemini":
+                # Gemini doesn't support max_tokens parameter
                 response = self.conversation.prompt(
                     conversation_text,
                     system=system_prompt,

@@ -1,0 +1,906 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>📊 Batch Evaluation Results</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --primary: #3b82f6;
+            --primary-light: #dbeafe;
+            --success: #10b981;
+            --success-light: #d1fae5;
+            --error: #ef4444;
+            --error-light: #fee2e2;
+            --warning: #f59e0b;
+            --warning-light: #fef3c7;
+            --info: #6366f1;
+            --info-light: #e0e7ff;
+            --neutral-50: #f9fafb;
+            --neutral-100: #f3f4f6;
+            --neutral-200: #e5e7eb;
+            --neutral-300: #d1d5db;
+            --neutral-400: #9ca3af;
+            --neutral-500: #6b7280;
+            --neutral-600: #4b5563;
+            --neutral-700: #374151;
+            --neutral-800: #1f2937;
+            --neutral-900: #111827;
+            --shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+            --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+        }
+
+        body {
+            font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            line-height: 1.6;
+            color: var(--neutral-800);
+            background: var(--neutral-50);
+            padding: 1rem;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .header {
+            background: linear-gradient(135deg, var(--primary) 0%, var(--info) 100%);
+            color: white;
+            padding: 2rem;
+            border-radius: 12px;
+            margin-bottom: 2rem;
+            text-align: center;
+            box-shadow: var(--shadow-lg);
+        }
+
+        .header h1 {
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+        }
+
+        .header .subtitle {
+            font-size: 1.2rem;
+            opacity: 0.9;
+        }
+
+        .summary-section {
+            background: white;
+            border-radius: 12px;
+            padding: 2rem;
+            margin-bottom: 2rem;
+            box-shadow: var(--shadow);
+        }
+
+        .summary-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .summary-card {
+            background: var(--neutral-50);
+            border: 2px solid var(--neutral-200);
+            border-radius: 12px;
+            padding: 1.5rem;
+            text-align: center;
+            transition: all 0.3s ease;
+        }
+
+        .summary-card:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow);
+        }
+
+        .summary-card.success {
+            border-color: var(--success);
+            background: linear-gradient(135deg, var(--success-light), white);
+        }
+
+        .summary-card.error {
+            border-color: var(--error);
+            background: linear-gradient(135deg, var(--error-light), white);
+        }
+
+        .summary-card.info {
+            border-color: var(--info);
+            background: linear-gradient(135deg, var(--info-light), white);
+        }
+
+        .summary-value {
+            font-size: 2rem;
+            font-weight: 700;
+            color: var(--neutral-900);
+            margin-bottom: 0.5rem;
+        }
+
+        .summary-label {
+            font-size: 0.9rem;
+            color: var(--neutral-600);
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .success-rate-bar {
+            width: 100%;
+            height: 8px;
+            background: var(--neutral-200);
+            border-radius: 4px;
+            overflow: hidden;
+            margin-top: 1rem;
+        }
+
+        .success-rate-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--success), var(--primary));
+            transition: width 0.6s ease;
+        }
+
+        .config-info {
+            background: var(--info-light);
+            border-radius: 8px;
+            padding: 1rem;
+            border-left: 4px solid var(--info);
+        }
+
+        .config-info h3 {
+            color: var(--info);
+            margin-bottom: 0.5rem;
+        }
+
+        .config-details {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            font-size: 0.9rem;
+        }
+
+        .config-item {
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .config-label {
+            font-weight: 500;
+            color: var(--neutral-700);
+        }
+
+        .config-value {
+            color: var(--neutral-900);
+            font-family: 'SF Mono', Monaco, monospace;
+        }
+
+        .results-section {
+            margin-bottom: 2rem;
+        }
+
+        .section-title {
+            font-size: 2rem;
+            font-weight: 700;
+            text-align: center;
+            margin-bottom: 2rem;
+            color: var(--neutral-800);
+        }
+
+        .results-grid {
+            display: grid;
+            gap: 1.5rem;
+        }
+
+        .result-card {
+            background: white;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: var(--shadow);
+            transition: all 0.3s ease;
+        }
+
+        .result-card:hover {
+            box-shadow: var(--shadow-lg);
+        }
+
+        .result-header {
+            background: var(--neutral-100);
+            padding: 1.5rem;
+            border-bottom: 1px solid var(--neutral-200);
+            cursor: pointer;
+            user-select: none;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .result-header:hover {
+            background: var(--neutral-200);
+        }
+
+        .result-header.success {
+            background: linear-gradient(135deg, var(--success-light), var(--neutral-100));
+            border-left: 4px solid var(--success);
+        }
+
+        .result-header.error {
+            background: linear-gradient(135deg, var(--error-light), var(--neutral-100));
+            border-left: 4px solid var(--error);
+        }
+
+        .result-title {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .result-name {
+            font-size: 1.2rem;
+            font-weight: 600;
+            color: var(--neutral-800);
+        }
+
+        .result-status {
+            padding: 0.4rem 0.8rem;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: 600;
+        }
+
+        .result-status.success {
+            background: var(--success);
+            color: white;
+        }
+
+        .result-status.error {
+            background: var(--error);
+            color: white;
+        }
+
+        .result-meta {
+            display: flex;
+            gap: 1rem;
+            align-items: center;
+            font-size: 0.85rem;
+            color: var(--neutral-600);
+        }
+
+        .expand-icon {
+            transition: transform 0.3s ease;
+            color: var(--neutral-600);
+            font-size: 1.2rem;
+        }
+
+        .result-card.expanded .expand-icon {
+            transform: rotate(180deg);
+        }
+
+        .result-content {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.4s ease;
+        }
+
+        .result-card.expanded .result-content {
+            max-height: 2000px;
+        }
+
+        .result-body {
+            padding: 1.5rem;
+        }
+
+        .result-stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .stat-item {
+            background: var(--neutral-50);
+            padding: 1rem;
+            border-radius: 8px;
+            text-align: center;
+            border: 1px solid var(--neutral-200);
+        }
+
+        .stat-value {
+            font-size: 1.1rem;
+            font-weight: 700;
+            color: var(--neutral-900);
+            margin-bottom: 0.25rem;
+        }
+
+        .stat-label {
+            font-size: 0.75rem;
+            color: var(--neutral-600);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .error-section {
+            background: var(--error-light);
+            border: 1px solid var(--error);
+            border-radius: 8px;
+            padding: 1rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .error-section h4 {
+            color: var(--error);
+            margin-bottom: 0.5rem;
+        }
+
+        .final-answer-section {
+            background: var(--success-light);
+            border: 1px solid var(--success);
+            border-radius: 8px;
+            padding: 1rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .final-answer-section h4 {
+            color: var(--success);
+            margin-bottom: 0.5rem;
+        }
+
+        .answer-text {
+            white-space: pre-wrap;
+            line-height: 1.5;
+            font-size: 0.9rem;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+
+        .steps-section {
+            background: var(--neutral-50);
+            border-radius: 8px;
+            border: 1px solid var(--neutral-200);
+            overflow: hidden;
+        }
+
+        .steps-header {
+            padding: 1rem;
+            background: var(--neutral-100);
+            border-bottom: 1px solid var(--neutral-200);
+            cursor: pointer;
+            user-select: none;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .steps-header:hover {
+            background: var(--neutral-200);
+        }
+
+        .steps-header h4 {
+            font-size: 1rem;
+            color: var(--neutral-800);
+        }
+
+        .steps-expand-icon {
+            transition: transform 0.3s ease;
+            color: var(--neutral-600);
+        }
+
+        .steps-section.expanded .steps-expand-icon {
+            transform: rotate(180deg);
+        }
+
+        .steps-content {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease;
+        }
+
+        .steps-section.expanded .steps-content {
+            max-height: 1500px;
+        }
+
+        .step-item {
+            padding: 1rem;
+            border-bottom: 1px solid var(--neutral-200);
+        }
+
+        .step-item:last-child {
+            border-bottom: none;
+        }
+
+        .step-header {
+            font-weight: 600;
+            color: var(--neutral-800);
+            margin-bottom: 0.5rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .step-number {
+            background: var(--primary);
+            color: white;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.8rem;
+            font-weight: 700;
+        }
+
+        .step-details {
+            font-size: 0.85rem;
+            color: var(--neutral-700);
+        }
+
+        .step-thought,
+        .step-action,
+        .step-observation {
+            padding: 0.75rem;
+            border-radius: 6px;
+            margin-bottom: 0.5rem;
+            border-left: 3px solid;
+        }
+
+        .step-thought {
+            background: var(--info-light);
+            border-left-color: var(--info);
+        }
+
+        .step-action {
+            background: var(--warning-light);
+            border-left-color: var(--warning);
+        }
+
+        .step-observation {
+            background: var(--success-light);
+            border-left-color: var(--success);
+        }
+
+        .observation-content {
+            white-space: pre-wrap;
+            font-family: 'SF Mono', Monaco, monospace;
+            font-size: 0.85rem;
+            line-height: 1.4;
+        }
+
+        .observation-content.collapsed {
+            max-height: 200px;
+            overflow: hidden;
+        }
+
+        .observation-toggle {
+            background: var(--primary);
+            color: white;
+            border: none;
+            padding: 0.25rem 0.75rem;
+            border-radius: 4px;
+            font-size: 0.8rem;
+            cursor: pointer;
+            margin-top: 0.5rem;
+            transition: background-color 0.2s ease;
+        }
+
+        .observation-toggle:hover {
+            background: var(--info);
+        }
+
+        .step-content-label {
+            font-weight: 600;
+            margin-bottom: 0.25rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .filters-section {
+            background: white;
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin-bottom: 2rem;
+            box-shadow: var(--shadow);
+        }
+
+        .filters-title {
+            font-size: 1.2rem;
+            font-weight: 600;
+            margin-bottom: 1rem;
+            color: var(--neutral-800);
+        }
+
+        .filters-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+        }
+
+        .filter-group {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .filter-label {
+            font-size: 0.9rem;
+            font-weight: 500;
+            color: var(--neutral-700);
+        }
+
+        .filter-select,
+        .filter-input {
+            padding: 0.5rem;
+            border: 1px solid var(--neutral-300);
+            border-radius: 6px;
+            font-size: 0.9rem;
+        }
+
+        .filter-select:focus,
+        .filter-input:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 2px var(--primary-light);
+        }
+
+        @media (max-width: 768px) {
+            body {
+                padding: 0.5rem;
+            }
+
+            .header {
+                padding: 1.5rem;
+            }
+
+            .header h1 {
+                font-size: 2rem;
+            }
+
+            .summary-grid {
+                grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+                gap: 1rem;
+            }
+
+            .result-stats {
+                grid-template-columns: repeat(2, 1fr);
+            }
+
+            .result-title {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 0.5rem;
+            }
+
+            .result-meta {
+                flex-wrap: wrap;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📊 Batch Evaluation Results</h1>
+            <div class="subtitle">{{ batch_data.total_prompts }} prompts evaluated • {{ timestamp }}</div>
+        </div>
+
+        <div class="summary-section">
+            <div class="summary-grid">
+                <div class="summary-card success">
+                    <div class="summary-value">{{ batch_data.successful }}</div>
+                    <div class="summary-label">Successful</div>
+                </div>
+                <div class="summary-card error">
+                    <div class="summary-value">{{ batch_data.failed }}</div>
+                    <div class="summary-label">Failed</div>
+                </div>
+                <div class="summary-card info">
+                    <div class="summary-value">{{ batch_data.total_prompts }}</div>
+                    <div class="summary-label">Total Prompts</div>
+                </div>
+                <div class="summary-card">
+                    <div class="summary-value">{{ "%.1f"|format(batch_data.successful / batch_data.total_prompts * 100) }}%</div>
+                    <div class="summary-label">Success Rate</div>
+                    <div class="success-rate-bar">
+                        <div class="success-rate-fill" style="width: {{ batch_data.successful / batch_data.total_prompts * 100 }}%"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="config-info">
+                <h3>🔧 Configuration Details</h3>
+                <div class="config-details">
+                    <div class="config-item">
+                        <span class="config-label">Config File:</span>
+                        <span class="config-value">{{ batch_data.config_file or 'Default' }}</span>
+                    </div>
+                    <div class="config-item">
+                        <span class="config-label">Prompts Directory:</span>
+                        <span class="config-value">{{ batch_data.prompts_directory or 'N/A' }}</span>
+                    </div>
+                    {% if batch_data.metadata and batch_data.metadata.servers %}
+                    <div class="config-item">
+                        <span class="config-label">MCP Servers:</span>
+                        <span class="config-value">{{ batch_data.metadata.servers|join(', ') }}</span>
+                    </div>
+                    {% endif %}
+                    {% if batch_data.metadata and batch_data.metadata.duration_seconds %}
+                    <div class="config-item">
+                        <span class="config-label">Total Duration:</span>
+                        <span class="config-value">{{ "%.1f"|format(batch_data.metadata.duration_seconds) }}s</span>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <div class="filters-section">
+            <div class="filters-title">🔍 Filter Results</div>
+            <div class="filters-grid">
+                <div class="filter-group">
+                    <label class="filter-label">Status</label>
+                    <select class="filter-select" id="statusFilter" onchange="filterResults()">
+                        <option value="all">All Results</option>
+                        <option value="success">Successful Only</option>
+                        <option value="failed">Failed Only</option>
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <label class="filter-label">Search Prompts</label>
+                    <input type="text" class="filter-input" id="searchFilter" placeholder="Search prompt names..." onkeyup="filterResults()">
+                </div>
+                <div class="filter-group">
+                    <label class="filter-label">Min Execution Time</label>
+                    <input type="number" class="filter-input" id="timeFilter" placeholder="Seconds" step="0.1" onchange="filterResults()">
+                </div>
+                <div class="filter-group">
+                    <label class="filter-label">Sort By</label>
+                    <select class="filter-select" id="sortFilter" onchange="filterResults()">
+                        <option value="name">Name</option>
+                        <option value="time">Execution Time</option>
+                        <option value="status">Status</option>
+                        <option value="iterations">Iterations</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <div class="results-section">
+            <h2 class="section-title">🎯 Individual Results</h2>
+            
+            <div class="results-grid" id="resultsContainer">
+                {% for result_item in batch_data.results %}
+                <div class="result-card {{ 'success' if result_item.result.success else 'failed' }}" 
+                     data-name="{{ result_item.prompt_file }}"
+                     data-success="{{ result_item.result.success|lower }}"
+                     data-time="{{ result_item.result.execution_time_seconds }}"
+                     data-iterations="{{ result_item.result.total_iterations }}">
+                    
+                    <div class="result-header {{ 'success' if result_item.result.success else 'error' }}" onclick="toggleResult(this)">
+                        <div class="result-title">
+                            <div class="result-name">{{ result_item.prompt_file }}</div>
+                            <div class="result-status {{ 'success' if result_item.result.success else 'error' }}">
+                                {{ '✅ Success' if result_item.result.success else '❌ Failed' }}
+                            </div>
+                        </div>
+                        <div class="result-meta">
+                            <span>{{ "%.2f"|format(result_item.result.execution_time_seconds) }}s</span>
+                            <span>{{ result_item.result.total_iterations }} iterations</span>
+                            <span>{{ result_item.result.steps|length }} steps</span>
+                            <div class="expand-icon">▼</div>
+                        </div>
+                    </div>
+
+                    <div class="result-content">
+                        <div class="result-body">
+                            <div class="result-stats">
+                                <div class="stat-item">
+                                    <div class="stat-value">{{ "%.2f"|format(result_item.result.execution_time_seconds) }}s</div>
+                                    <div class="stat-label">Duration</div>
+                                </div>
+                                <div class="stat-item">
+                                    <div class="stat-value">{{ result_item.result.total_iterations }}</div>
+                                    <div class="stat-label">Iterations</div>
+                                </div>
+                                <div class="stat-item">
+                                    <div class="stat-value">{{ result_item.result.steps|length }}</div>
+                                    <div class="stat-label">Steps</div>
+                                </div>
+                                <div class="stat-item">
+                                    <div class="stat-value">{{ result_item.result.failed_tool_calls or 0 }}</div>
+                                    <div class="stat-label">Failed Tools</div>
+                                </div>
+                                {% if result_item.result.total_tokens %}
+                                <div class="stat-item">
+                                    <div class="stat-value">{{ "{:,}".format(result_item.result.total_tokens) }}</div>
+                                    <div class="stat-label">Tokens</div>
+                                </div>
+                                {% endif %}
+                            </div>
+
+                            {% if result_item.result.error %}
+                            <div class="error-section">
+                                <h4>❌ Error Details</h4>
+                                <div>{{ result_item.result.error }}</div>
+                            </div>
+                            {% endif %}
+
+                            {% if result_item.result.final_answer %}
+                            <div class="final-answer-section">
+                                <h4>🎯 Final Answer</h4>
+                                <div class="answer-text">{{ result_item.result.final_answer | markdown | safe }}</div>
+                            </div>
+                            {% endif %}
+
+                            {% if result_item.result.steps %}
+                            <div class="steps-section" onclick="toggleSteps(this)">
+                                <div class="steps-header">
+                                    <h4>📝 Execution Steps ({{ result_item.result.steps|length }})</h4>
+                                    <div class="steps-expand-icon">▼</div>
+                                </div>
+                                <div class="steps-content">
+                                    {% for step in result_item.result.steps %}
+                                    <div class="step-item">
+                                        <div class="step-header">
+                                            <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                                <div class="step-number">{{ loop.index }}</div>
+                                                <span>{{ step.action or 'Thinking' }}</span>
+                                            </div>
+                                            {% if step.tokens_used %}
+                                            <span style="font-size: 0.8rem; color: var(--neutral-500);">{{ step.tokens_used }} tokens</span>
+                                            {% endif %}
+                                        </div>
+                                        <div class="step-details">
+                                            {% if step.thought %}
+                                            <div class="step-thought">
+                                                <div class="step-content-label">💭 Thought</div>
+                                                <div>{{ step.thought }}</div>
+                                            </div>
+                                            {% endif %}
+                                            {% if step.action %}
+                                            <div class="step-action">
+                                                <div class="step-content-label">⚡ Action</div>
+                                                <div>{{ step.action }}</div>
+                                                {% if step.action_input %}
+                                                <div style="margin-top: 0.5rem; font-family: 'SF Mono', Monaco, monospace; font-size: 0.8rem; background: rgba(0,0,0,0.1); padding: 0.5rem; border-radius: 4px;">
+                                                    {{ step.action_input|tojson(indent=2) }}
+                                                </div>
+                                                {% endif %}
+                                            </div>
+                                            {% endif %}
+                                            {% if step.observation %}
+                                            <div class="step-observation">
+                                                <div class="step-content-label">👁️ Observation</div>
+                                                {% set lines = step.observation.split('\n') %}
+                                                {% if lines|length > 10 %}
+                                                <div class="observation-content collapsed" id="batch-obs-{{ loop.index0 }}-{{ loop.index }}">
+                                                    {{ lines[:10]|join('\n') }}
+                                                    <div style="color: var(--neutral-500); font-style: italic; margin-top: 0.5rem;">
+                                                        ... ({{ lines|length - 10 }} more lines)
+                                                    </div>
+                                                </div>
+                                                <button class="observation-toggle" onclick="toggleBatchObservation('batch-obs-{{ loop.index0 }}-{{ loop.index }}')">
+                                                    Show Full Output
+                                                </button>
+                                                <div class="observation-content" id="batch-obs-full-{{ loop.index0 }}-{{ loop.index }}" style="display: none;">
+                                                    {{ step.observation }}
+                                                </div>
+                                                {% else %}
+                                                <div class="observation-content">
+                                                    {{ step.observation }}
+                                                </div>
+                                                {% endif %}
+                                            </div>
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                    {% endfor %}
+                                </div>
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function toggleResult(header) {
+            const card = header.closest('.result-card');
+            card.classList.toggle('expanded');
+        }
+
+        function toggleSteps(element) {
+            element.classList.toggle('expanded');
+        }
+
+        function toggleBatchObservation(obsId) {
+            const collapsedDiv = document.getElementById(obsId);
+            const fullDiv = document.getElementById(obsId.replace('batch-obs-', 'batch-obs-full-'));
+            const button = collapsedDiv.parentElement.querySelector('.observation-toggle');
+            
+            if (collapsedDiv.style.display === 'none') {
+                // Show collapsed version
+                collapsedDiv.style.display = 'block';
+                fullDiv.style.display = 'none';
+                button.textContent = 'Show Full Output';
+            } else {
+                // Show full version
+                collapsedDiv.style.display = 'none';
+                fullDiv.style.display = 'block';
+                button.textContent = 'Show Less';
+            }
+        }
+
+        function filterResults() {
+            const statusFilter = document.getElementById('statusFilter').value;
+            const searchFilter = document.getElementById('searchFilter').value.toLowerCase();
+            const timeFilter = parseFloat(document.getElementById('timeFilter').value) || 0;
+            const sortFilter = document.getElementById('sortFilter').value;
+            
+            const container = document.getElementById('resultsContainer');
+            const cards = Array.from(container.children);
+            
+            // Filter cards
+            cards.forEach(card => {
+                const name = card.dataset.name.toLowerCase();
+                const success = card.dataset.success === 'true';
+                const time = parseFloat(card.dataset.time);
+                
+                let show = true;
+                
+                // Status filter
+                if (statusFilter === 'success' && !success) show = false;
+                if (statusFilter === 'failed' && success) show = false;
+                
+                // Search filter
+                if (searchFilter && !name.includes(searchFilter)) show = false;
+                
+                // Time filter
+                if (timeFilter > 0 && time < timeFilter) show = false;
+                
+                card.style.display = show ? 'block' : 'none';
+            });
+            
+            // Sort visible cards
+            const visibleCards = cards.filter(card => card.style.display !== 'none');
+            visibleCards.sort((a, b) => {
+                switch (sortFilter) {
+                    case 'name':
+                        return a.dataset.name.localeCompare(b.dataset.name);
+                    case 'time':
+                        return parseFloat(b.dataset.time) - parseFloat(a.dataset.time);
+                    case 'status':
+                        return b.dataset.success.localeCompare(a.dataset.success);
+                    case 'iterations':
+                        return parseInt(b.dataset.iterations) - parseInt(a.dataset.iterations);
+                    default:
+                        return 0;
+                }
+            });
+            
+            // Re-append sorted cards
+            visibleCards.forEach(card => container.appendChild(card));
+        }
+
+        // Auto-expand first failed result for quick debugging
+        document.addEventListener('DOMContentLoaded', function() {
+            const firstFailedCard = document.querySelector('.result-card.failed');
+            if (firstFailedCard) {
+                firstFailedCard.classList.add('expanded');
+                
+                // Also expand its steps if it has them
+                const stepsSection = firstFailedCard.querySelector('.steps-section');
+                if (stepsSection) {
+                    stepsSection.classList.add('expanded');
+                }
+            }
+        });
+    </script>
+</body>
+</html>
