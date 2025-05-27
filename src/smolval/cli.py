@@ -12,6 +12,7 @@ import click
 
 from .agent import Agent
 from .config import Config
+from .judge import LLMJudge, JudgedResult
 from .llm_client import LLMClient
 from .mcp_client import MCPClientManager
 from .output_manager import OutputManager
@@ -91,9 +92,24 @@ def main(ctx: click.Context, verbose: bool, debug: bool, no_banner: bool) -> Non
 )
 @click.option("--output-dir", help="Output directory for results")
 @click.option("--run-name", help="Name for this evaluation run")
+@click.option(
+    "--judge", 
+    is_flag=True, 
+    help="Enable LLM-as-judge evaluation for quality assessment"
+)
+@click.option(
+    "--judge-model",
+    help="Specific model to use for LLM judgment (e.g., 'gpt-4')"
+)
 @click.pass_context
 def eval(
-    ctx: click.Context, prompt_file: str, config: str, output_dir: str, run_name: str
+    ctx: click.Context, 
+    prompt_file: str, 
+    config: str, 
+    output_dir: str, 
+    run_name: str,
+    judge: bool,
+    judge_model: str
 ) -> None:
     """Evaluate MCP servers using a prompt file."""
     # Show banner unless disabled
@@ -101,7 +117,7 @@ def eval(
         _show_banner()
 
     debug = ctx.obj.get("debug", False)
-    asyncio.run(_run_eval(prompt_file, config, output_dir, run_name, debug))
+    asyncio.run(_run_eval(prompt_file, config, output_dir, run_name, debug, judge, judge_model))
 
 
 async def _run_eval(
@@ -110,6 +126,8 @@ async def _run_eval(
     output_dir: str,
     run_name: str,
     debug: bool = False,
+    enable_judge: bool = False,
+    judge_model: str | None = None,
 ) -> None:
     """Run evaluation asynchronously."""
     logger = logging.getLogger(__name__)
@@ -190,6 +208,58 @@ async def _run_eval(
             },
         }
 
+        # Run LLM-as-judge evaluation if requested
+        final_result_data = result_data  # Default to original result
+        if enable_judge or config.evaluation.judge.enabled:
+            click.echo("Running LLM-as-judge evaluation...")
+            
+            try:
+                # Create judge LLM client (use separate model if specified)
+                judge_config = config.llm
+                if judge_model:
+                    # Create a copy with the specified model
+                    judge_config = judge_config.model_copy()
+                    judge_config.model = judge_model
+                elif config.evaluation.judge.model:
+                    judge_config = judge_config.model_copy()
+                    judge_config.model = config.evaluation.judge.model
+                
+                judge_llm_client = LLMClient(judge_config)
+                judge = LLMJudge(judge_llm_client, judge_model=judge_config.model)
+                
+                # Run judgment
+                judgment = await judge.judge_result(result_data, prompt)
+                
+                # Create judged result
+                judged_result = JudgedResult(
+                    original_result=result_data,
+                    judgment=judgment,
+                    metadata={
+                        "judge_model": judge_config.model,
+                        "judge_provider": judge_config.provider,
+                        "criteria_count": len(judgment.scores),
+                    }
+                )
+                
+                # Update result data to include judgment
+                final_result_data = judged_result.model_dump()
+                
+                # Show judgment summary
+                click.echo(f"📊 Overall Quality Score: {judgment.overall_score:.2f}/1.0")
+                click.echo("\n🎯 Criterion Scores:")
+                for score in judgment.scores:
+                    click.echo(f"  • {score.criterion}: {score.score:.2f}")
+                
+                if judgment.strengths:
+                    click.echo(f"\n✅ Strengths: {', '.join(judgment.strengths[:3])}")
+                if judgment.weaknesses:
+                    click.echo(f"⚠️  Areas for improvement: {', '.join(judgment.weaknesses[:3])}")
+                
+            except Exception as e:
+                click.echo(f"⚠️ Judge evaluation failed: {e}")
+                logger.warning("Judge evaluation failed: %s", e)
+                # Continue with original result
+
         # Output result using OutputManager
         if output_dir:
             # Use output manager with specified directory
@@ -209,7 +279,7 @@ async def _run_eval(
         eval_name = prompt_path.stem
 
         # Write results in all formats
-        output_files = output_manager.write_evaluation_results(result_data, eval_name)
+        output_files = output_manager.write_evaluation_results(final_result_data, eval_name)
 
         click.echo(f"Results written to: {output_manager.get_run_directory()}")
         for format_type, file_path in output_files.items():
