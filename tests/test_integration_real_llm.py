@@ -86,8 +86,8 @@ class TestRealLLMIntegration:
         config = Config(
             mcp_servers=[
                 MCPServerConfig(
-                    name="mock_filesystem",
-                    command=["python", "-m", "tests.mock_servers.filesystem"],
+                    name="filesystem",
+                    command=["npx", "@modelcontextprotocol/server-filesystem", str(temp_test_files)],
                     env={},
                 )
             ],
@@ -100,16 +100,13 @@ class TestRealLLMIntegration:
         mcp_manager = MCPClientManager()
 
         try:
-            # This would connect to our mock filesystem server
-            # but use a real LLM to generate responses
+            # Connect to real filesystem MCP server
             await mcp_manager.connect(config.mcp_servers[0])
 
             agent = Agent(config, llm_client, mcp_manager)
 
-            # Test with a simple task
-            prompt = (
-                f"Please list the files in {temp_test_files} and tell me what you find."
-            )
+            # Test with a filesystem task using the real MCP server
+            prompt = f"Please list the files in the directory and read the contents of test.txt. Tell me what you find."
             result = await agent.run(prompt)
 
             # Verify the agent completed the task
@@ -117,7 +114,7 @@ class TestRealLLMIntegration:
             assert len(result.steps) > 0
             assert (
                 "test.txt" in result.final_answer.lower()
-                or "test file" in result.final_answer.lower()
+                or "integration testing" in result.final_answer.lower()
             )
 
         finally:
