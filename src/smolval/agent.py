@@ -1,5 +1,6 @@
 """ReAct agent implementation for MCP server evaluation."""
 
+import asyncio
 import logging
 import time
 from collections.abc import Callable
@@ -59,6 +60,33 @@ class Agent:
         self, prompt: str, progress_callback: Callable[[int, int], None] | None = None
     ) -> AgentResult:
         """Run the agent on a given prompt using ReAct pattern."""
+        try:
+            # Apply timeout if configured
+            if self.config.evaluation.timeout_seconds > 0:
+                return await asyncio.wait_for(
+                    self._run_agent_loop(prompt, progress_callback),
+                    timeout=self.config.evaluation.timeout_seconds,
+                )
+            else:
+                return await self._run_agent_loop(prompt, progress_callback)
+        except TimeoutError:
+            logger.error(
+                "Agent execution timed out after %d seconds",
+                self.config.evaluation.timeout_seconds,
+            )
+            return AgentResult(
+                success=False,
+                final_answer="",
+                steps=[],
+                total_iterations=0,
+                error=f"Agent execution timed out after {self.config.evaluation.timeout_seconds} seconds",
+                execution_time_seconds=self.config.evaluation.timeout_seconds,
+            )
+
+    async def _run_agent_loop(
+        self, prompt: str, progress_callback: Callable[[int, int], None] | None = None
+    ) -> AgentResult:
+        """Internal method that runs the actual agent loop."""
         start_time = time.time()
         steps: list[AgentStep] = []
         # Reset the recent steps cache for this run
@@ -636,19 +664,23 @@ class Agent:
                 observation = f"Tool execution failed: {result.error}"
             else:
                 observation = result.content
-                
+
                 # Check if tool returned a JSON response indicating failure
                 if observation:
                     try:
                         import json
+
                         parsed_response = json.loads(observation.strip())
-                        if isinstance(parsed_response, dict) and parsed_response.get("success") is False:
+                        if (
+                            isinstance(parsed_response, dict)
+                            and parsed_response.get("success") is False
+                        ):
                             failed = True
                             logger.debug("Tool %s returned success:false", tool_name)
                     except (json.JSONDecodeError, AttributeError):
                         # Not JSON or parsing failed - that's fine, treat as success
                         pass
-                
+
                 if not failed:
                     logger.debug("Tool %s executed successfully", tool_name)
 
