@@ -263,11 +263,11 @@ class TestFileSystemIntegration:
 # Test utility functions for integration tests
 def create_test_config(temp_dir: Path) -> Path:
     """Create a test configuration file."""
-    config_content = """
+    config_content = f"""
 mcp_servers:
   - name: "test_filesystem"
-    command: ["python", "-m", "tests.mock_servers.filesystem"]
-    env: {}
+    command: ["npx", "@modelcontextprotocol/server-filesystem", "{temp_dir}"]
+    env: {{}}
 
 llm:
   provider: "anthropic"
