@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 class JudgmentScore(BaseModel):
     """Individual judgment score with reasoning."""
-    
+
     criterion: str
     score: float  # 0.0 to 1.0
     reasoning: str
@@ -22,7 +22,7 @@ class JudgmentScore(BaseModel):
 
 class JudgmentResult(BaseModel):
     """Complete judgment result for an evaluation."""
-    
+
     overall_score: float  # 0.0 to 1.0, weighted average
     scores: list[JudgmentScore]
     summary: str
@@ -33,7 +33,7 @@ class JudgmentResult(BaseModel):
 
 class JudgmentCriteria(BaseModel):
     """Configuration for judgment criteria."""
-    
+
     name: str
     description: str
     weight: float  # Relative weight for overall score
@@ -78,9 +78,8 @@ Provide your evaluation in this JSON format:
         "relevance": <0.0-1.0>
     }}
 }}
-""".strip()
+""".strip(),
     ),
-    
     JudgmentCriteria(
         name="reasoning_quality",
         description="Quality of the step-by-step reasoning process",
@@ -118,9 +117,8 @@ Provide your evaluation in this JSON format:
         "adaptability": <0.0-1.0>
     }}
 }}
-""".strip()
+""".strip(),
     ),
-    
     JudgmentCriteria(
         name="process_efficiency",
         description="Efficiency and optimization of the execution process",
@@ -161,9 +159,8 @@ Provide your evaluation in this JSON format:
         "resource_utilization": <0.0-1.0>
     }}
 }}
-""".strip()
+""".strip(),
     ),
-    
     JudgmentCriteria(
         name="task_understanding",
         description="Understanding and adherence to task requirements",
@@ -203,22 +200,22 @@ Provide your evaluation in this JSON format:
         "requirement_fulfillment": <0.0-1.0>
     }}
 }}
-""".strip()
+""".strip(),
     ),
 ]
 
 
 class LLMJudge:
     """LLM-based evaluation system for smolval results."""
-    
+
     def __init__(
-        self, 
+        self,
         llm_client: LLMClient,
         criteria: list[JudgmentCriteria] | None = None,
-        judge_model: str | None = None
+        judge_model: str | None = None,
     ) -> None:
         """Initialize the LLM judge.
-        
+
         Args:
             llm_client: LLM client for making judgment calls
             criteria: Custom evaluation criteria (uses defaults if None)
@@ -227,31 +224,30 @@ class LLMJudge:
         self.llm_client = llm_client
         self.criteria = criteria or DEFAULT_CRITERIA
         self.judge_model = judge_model
-        
+
         # Validate criteria weights
         total_weight = sum(c.weight for c in self.criteria)
         if abs(total_weight - 1.0) > 0.01:
-            logger.warning(f"Criteria weights sum to {total_weight}, not 1.0. Normalizing...")
+            logger.warning(
+                f"Criteria weights sum to {total_weight}, not 1.0. Normalizing..."
+            )
             for criterion in self.criteria:
                 criterion.weight /= total_weight
-    
+
     async def judge_result(
-        self, 
-        result_data: dict[str, Any],
-        prompt: str
+        self, result_data: dict[str, Any], prompt: str
     ) -> JudgmentResult:
         """Judge a single evaluation result.
-        
+
         Args:
             result_data: Complete result data from smolval evaluation
             prompt: Original task prompt
-            
+
         Returns:
             JudgmentResult with scores and analysis
         """
-        result = result_data["result"]
         scores = []
-        
+
         for criterion in self.criteria:
             try:
                 score = await self._evaluate_criterion(criterion, result_data, prompt)
@@ -259,26 +255,28 @@ class LLMJudge:
             except Exception as e:
                 logger.error(f"Failed to evaluate criterion {criterion.name}: {e}")
                 # Fallback score
-                scores.append(JudgmentScore(
-                    criterion=criterion.name,
-                    score=0.0,
-                    reasoning=f"Evaluation failed: {e}",
-                ))
-        
+                scores.append(
+                    JudgmentScore(
+                        criterion=criterion.name,
+                        score=0.0,
+                        reasoning=f"Evaluation failed: {e}",
+                    )
+                )
+
         # Calculate weighted overall score
         overall_score = sum(
-            score.score * criterion.weight 
+            score.score * criterion.weight
             for score, criterion in zip(scores, self.criteria, strict=True)
         )
-        
+
         # Generate summary
         summary = await self._generate_summary(scores, result_data, prompt)
-        
+
         # Extract strengths, weaknesses, suggestions
         all_strengths = []
         all_weaknesses = []
         all_suggestions = []
-        
+
         for score in scores:
             if score.details:
                 if "strengths" in score.details:
@@ -287,61 +285,57 @@ class LLMJudge:
                     all_weaknesses.extend(score.details["weaknesses"])
                 if "suggestions" in score.details:
                     all_suggestions.extend(score.details["suggestions"])
-        
+
         return JudgmentResult(
             overall_score=overall_score,
             scores=scores,
             summary=summary,
             strengths=all_strengths[:5],  # Top 5
-            weaknesses=all_weaknesses[:5],  # Top 5  
-            suggestions=all_suggestions[:5]  # Top 5
+            weaknesses=all_weaknesses[:5],  # Top 5
+            suggestions=all_suggestions[:5],  # Top 5
         )
-    
+
     async def _evaluate_criterion(
-        self, 
-        criterion: JudgmentCriteria,
-        result_data: dict[str, Any],
-        prompt: str
+        self, criterion: JudgmentCriteria, result_data: dict[str, Any], prompt: str
     ) -> JudgmentScore:
         """Evaluate a single criterion."""
-        result = result_data["result"]
-        
         # Prepare context data for the criterion
         context = self._prepare_context(criterion.name, result_data, prompt)
-        
+
         # Format the judgment prompt
         judgment_prompt = criterion.prompt_template.format(**context)
-        
+
         # Make the judgment call
         messages = [
-            LLMMessage(role="system", content="You are an expert evaluator of AI agent performance. Provide thorough, objective assessments based on the given criteria."),
-            LLMMessage(role="user", content=judgment_prompt)
+            LLMMessage(
+                role="system",
+                content="You are an expert evaluator of AI agent performance. Provide thorough, objective assessments based on the given criteria.",
+            ),
+            LLMMessage(role="user", content=judgment_prompt),
         ]
-        
-        response = await self.llm_client.generate(
-            messages=messages,
-            model=self.judge_model
-        )
-        
+
+        response = await self.llm_client.chat(messages=messages)
+
         # Parse the JSON response
         try:
             judgment_data = json.loads(response.content)
-            
+
             return JudgmentScore(
                 criterion=criterion.name,
                 score=float(judgment_data["score"]),
                 reasoning=judgment_data["reasoning"],
-                details=judgment_data
+                details=judgment_data,
             )
         except (json.JSONDecodeError, KeyError, ValueError) as e:
             logger.error(f"Failed to parse judgment response for {criterion.name}: {e}")
             logger.debug(f"Raw response: {response.content}")
-            
+
             # Fallback - try to extract score from text
             content = response.content.lower()
             if "score" in content:
                 # Try to find a decimal number after "score"
                 import re
+
                 match = re.search(r'score[":]*\s*([0-9]*\.?[0-9]+)', content)
                 if match:
                     score = min(1.0, max(0.0, float(match.group(1))))
@@ -349,32 +343,29 @@ class LLMJudge:
                     score = 0.5  # Default neutral score
             else:
                 score = 0.5
-            
+
             return JudgmentScore(
                 criterion=criterion.name,
                 score=score,
                 reasoning=f"Could not parse structured response: {response.content}",
                 details={"parse_error": str(e)},
             )
-    
+
     def _prepare_context(
-        self, 
-        criterion_name: str,
-        result_data: dict[str, Any],
-        prompt: str
+        self, criterion_name: str, result_data: dict[str, Any], prompt: str
     ) -> dict[str, Any]:
         """Prepare context data for a specific criterion evaluation."""
         result = result_data["result"]
-        
+
         context = {
             "prompt": prompt,
             "final_answer": result["final_answer"],
             "success": result["success"],
             "total_iterations": result["total_iterations"],
             "execution_time_seconds": result["execution_time_seconds"],
-            "failed_tool_calls": result.get("failed_tool_calls", 0)
+            "failed_tool_calls": result.get("failed_tool_calls", 0),
         }
-        
+
         if criterion_name == "reasoning_quality":
             # Prepare step-by-step reasoning summary
             steps = result.get("steps", [])
@@ -382,59 +373,62 @@ class LLMJudge:
             for i, step in enumerate(steps, 1):
                 step_summary = f"Step {i} (Iteration {step.get('iteration', i)}):\n"
                 step_summary += f"  Thought: {step.get('thought', 'N/A')}\n"
-                if step.get('action'):
+                if step.get("action"):
                     step_summary += f"  Action: {step['action']}\n"
-                    if step.get('action_input'):
-                        step_summary += f"  Input: {json.dumps(step['action_input'], indent=4)}\n"
-                if step.get('observation'):
-                    obs = step['observation']
+                    if step.get("action_input"):
+                        step_summary += (
+                            f"  Input: {json.dumps(step['action_input'], indent=4)}\n"
+                        )
+                if step.get("observation"):
+                    obs = step["observation"]
                     if len(obs) > 500:
                         obs = obs[:500] + "... (truncated)"
                     step_summary += f"  Observation: {obs}\n"
                 reasoning_steps.append(step_summary)
-            
+
             context["reasoning_steps"] = "\n".join(reasoning_steps)
-        
+
         elif criterion_name == "process_efficiency":
             # Prepare tool usage summary
             steps = result.get("steps", [])
-            tool_usage = {}
+            tool_usage: dict[str, int] = {}
             for step in steps:
-                if step.get('action'):
-                    tool_name = step['action']
+                if step.get("action"):
+                    tool_name = step["action"]
                     tool_usage[tool_name] = tool_usage.get(tool_name, 0) + 1
-            
+
             usage_summary = []
             for tool, count in tool_usage.items():
                 usage_summary.append(f"- {tool}: {count} times")
-            
-            context["tool_usage_summary"] = "\n".join(usage_summary) if usage_summary else "No tools used"
-        
+
+            context["tool_usage_summary"] = (
+                "\n".join(usage_summary) if usage_summary else "No tools used"
+            )
+
         elif criterion_name == "task_understanding":
             # Prepare approach summary
             steps = result.get("steps", [])
             if steps:
-                first_thoughts = [step.get('thought', '') for step in steps[:3]]
+                first_thoughts = [step.get("thought", "") for step in steps[:3]]
                 context["approach_summary"] = " → ".join(first_thoughts)
             else:
                 context["approach_summary"] = "No reasoning steps recorded"
-        
+
         return context
-    
+
     async def _generate_summary(
-        self, 
-        scores: list[JudgmentScore],
-        result_data: dict[str, Any],
-        prompt: str
+        self, scores: list[JudgmentScore], result_data: dict[str, Any], prompt: str
     ) -> str:
         """Generate an overall summary of the judgment."""
         result = result_data["result"]
-        
+
         # Create summary prompt
         score_summaries = []
         for score in scores:
-            score_summaries.append(f"- {score.criterion}: {score.score:.2f} - {score.reasoning[:100]}...")
-        
+            score_summaries.append(
+                f"- {score.criterion}: {score.score:.2f} - {score.reasoning[:100]}..."
+            )
+
         summary_prompt = f"""
 Based on the following individual criterion evaluations, provide a brief overall summary (2-3 sentences) of this agent's performance:
 
@@ -446,18 +440,18 @@ Criterion Scores:
 
 Overall Assessment:
 """
-        
+
         messages = [
-            LLMMessage(role="system", content="Provide a concise, balanced summary of the agent's performance."),
-            LLMMessage(role="user", content=summary_prompt)
+            LLMMessage(
+                role="system",
+                content="Provide a concise, balanced summary of the agent's performance.",
+            ),
+            LLMMessage(role="user", content=summary_prompt),
         ]
-        
+
         try:
-            response = await self.llm_client.generate(
-                messages=messages,
-                model=self.judge_model
-            )
-            return response.content.strip()
+            response = await self.llm_client.chat(messages=messages)
+            return response.content.strip() if response.content else ""
         except Exception as e:
             logger.error(f"Failed to generate summary: {e}")
             avg_score = sum(s.score for s in scores) / len(scores)
@@ -466,7 +460,7 @@ Overall Assessment:
 
 class JudgedResult(BaseModel):
     """Result with LLM judgment included."""
-    
+
     original_result: dict[str, Any]
     judgment: JudgmentResult
     metadata: dict[str, Any] | None = None

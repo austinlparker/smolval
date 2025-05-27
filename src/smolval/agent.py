@@ -636,19 +636,23 @@ class Agent:
                 observation = f"Tool execution failed: {result.error}"
             else:
                 observation = result.content
-                
+
                 # Check if tool returned a JSON response indicating failure
                 if observation:
                     try:
                         import json
+
                         parsed_response = json.loads(observation.strip())
-                        if isinstance(parsed_response, dict) and parsed_response.get("success") is False:
+                        if (
+                            isinstance(parsed_response, dict)
+                            and parsed_response.get("success") is False
+                        ):
                             failed = True
                             logger.debug("Tool %s returned success:false", tool_name)
                     except (json.JSONDecodeError, AttributeError):
                         # Not JSON or parsing failed - that's fine, treat as success
                         pass
-                
+
                 if not failed:
                     logger.debug("Tool %s executed successfully", tool_name)
 

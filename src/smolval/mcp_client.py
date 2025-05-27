@@ -3,8 +3,7 @@
 import logging
 import os
 import shutil
-from contextlib import AsyncExitStack, redirect_stderr
-from io import StringIO
+from contextlib import AsyncExitStack
 from typing import Any
 
 from mcp import ClientSession, stdio_client
@@ -87,7 +86,7 @@ class MCPClientManager:
 
             # For some servers, we need to suppress both stdout and stderr
             # MCP protocol uses stdio
-            
+
             server_params = StdioServerParameters(
                 command=command, args=args, env=env_vars
             )
@@ -102,7 +101,7 @@ class MCPClientManager:
                 )
             else:
                 # Use devnull to suppress stderr instead of printing to console
-                devnull = self.exit_stack.enter_context(open(os.devnull, 'w'))
+                devnull = self.exit_stack.enter_context(open(os.devnull, "w"))
                 stdio_transport = await self.exit_stack.enter_async_context(
                     stdio_client(server_params, errlog=devnull)
                 )
