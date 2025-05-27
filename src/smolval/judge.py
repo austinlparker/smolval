@@ -354,7 +354,7 @@ class LLMJudge:
                 criterion=criterion.name,
                 score=score,
                 reasoning=f"Could not parse structured response: {response.content}",
-                details={"parse_error": str(e)}
+                details={"parse_error": str(e)},
             )
     
     def _prepare_context(

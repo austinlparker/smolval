@@ -104,9 +104,11 @@ class ResultsFormatter:
             {
                 "prompt_file": result_data.get("metadata", {}).get("prompt_file", ""),
                 "success": result["success"],
-                "final_answer": result["final_answer"]
-                .replace("\n", " ")
-                .replace("\r", ""),
+                "final_answer": (
+                    result["final_answer"]
+                    .replace("\n", " ")
+                    .replace("\r", "")
+                ),
                 "total_iterations": result["total_iterations"],
                 "execution_time_seconds": result["execution_time_seconds"],
                 "failed_tool_calls": result.get("failed_tool_calls", 0),
@@ -134,9 +136,11 @@ class ResultsFormatter:
                         "prompt_file", ""
                     ),
                     "success": result["success"],
-                    "final_answer": result["final_answer"]
-                    .replace("\n", " ")
-                    .replace("\r", ""),
+                    "final_answer": (
+                        result["final_answer"]
+                        .replace("\n", " ")
+                        .replace("\r", "")
+                    ),
                     "total_iterations": result["total_iterations"],
                     "execution_time_seconds": result["execution_time_seconds"],
                     "failed_tool_calls": result.get("failed_tool_calls", 0),
@@ -878,9 +882,11 @@ class ResultsFormatter:
             {
                 "prompt_file": original_result.get("metadata", {}).get("prompt_file", ""),
                 "success": result["success"],
-                "final_answer": result["final_answer"]
-                .replace("\n", " ")
-                .replace("\r", ""),
+                "final_answer": (
+                    result["final_answer"]
+                    .replace("\n", " ")
+                    .replace("\r", "")
+                ),
                 "total_iterations": result["total_iterations"],
                 "execution_time_seconds": result["execution_time_seconds"],
                 "failed_tool_calls": result.get("failed_tool_calls", 0),
@@ -973,7 +979,6 @@ class ResultsFormatter:
         standard_html = self._format_single_html(original_result, None)
         
         # Extract the content between <body> tags to inject judgment
-        import re
         body_match = re.search(r'<div class="container">(.*?)</div>\s*<script>', standard_html, re.DOTALL)
         
         if body_match:

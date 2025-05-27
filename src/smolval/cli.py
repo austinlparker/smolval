@@ -461,8 +461,12 @@ async def _run_batch(
             "config_file": config_path,
             "prompts_directory": prompts_dir,
             "total_prompts": len(prompt_files),
-            "successful": sum(1 for r in results if bool(r["result"]["success"])),  # type: ignore[misc,index]
-            "failed": sum(1 for r in results if not bool(r["result"]["success"])),  # type: ignore[misc,index]
+            "successful": sum(
+                1 for r in results if bool(r["result"]["success"])
+            ),  # type: ignore[misc,index]
+            "failed": sum(
+                1 for r in results if not bool(r["result"]["success"])
+            ),  # type: ignore[misc,index]
             "results": results,
             "metadata": {
                 "timestamp": time.time(),
@@ -492,9 +496,10 @@ async def _run_batch(
         click.echo(f"Total prompts: {summary['total_prompts']}")
         click.echo(f"Successful: {summary['successful']} ✅")
         click.echo(f"Failed: {summary['failed']} ❌")
-        click.echo(
-            f"Success rate: {summary['successful']/summary['total_prompts']*100:.1f}%"  # type: ignore[operator]
-        )
+        success_rate = (
+            summary['successful'] / summary['total_prompts'] * 100
+        )  # type: ignore[operator]
+        click.echo(f"Success rate: {success_rate:.1f}%")
 
     except Exception as e:
         click.echo(f"❌ Batch evaluation failed: {e}")
