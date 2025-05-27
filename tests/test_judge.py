@@ -126,7 +126,7 @@ class TestLLMJudge:
         """Test evaluating a single criterion."""
         # Setup mock response
         mock_response = LLMResponse(content=sample_judgment_response)
-        mock_llm_client.generate = AsyncMock(return_value=mock_response)
+        mock_llm_client.chat = AsyncMock(return_value=mock_response)
 
         judge = LLMJudge(mock_llm_client)
         criterion = DEFAULT_CRITERIA[0]  # answer_quality
@@ -144,19 +144,25 @@ class TestLLMJudge:
     async def test_judge_result_full(self, mock_llm_client, sample_result_data):
         """Test full judgment of a result."""
 
-        # Mock LLM responses for each criterion
-        def mock_generate(messages, model=None):
-            return LLMResponse(
-                content="""{
-                "score": 0.8,
-                "reasoning": "Good performance overall",
-                "strengths": ["Clear answer"],
-                "weaknesses": ["Minor improvements possible"],
-                "details": {"accuracy": 0.8}
-            }"""
-            )
+        # Mock LLM responses for each criterion and summary
+        def mock_chat(messages, model=None):
+            # Check if this is a summary request by looking at the last message
+            if len(messages) > 0 and "overall summary" in messages[-1].content:
+                return LLMResponse(
+                    content="Agent performed well overall with good efficiency."
+                )
+            else:
+                return LLMResponse(
+                    content="""{
+                    "score": 0.8,
+                    "reasoning": "Good performance overall",
+                    "strengths": ["Clear answer"],
+                    "weaknesses": ["Minor improvements possible"],
+                    "details": {"accuracy": 0.8}
+                }"""
+                )
 
-        mock_llm_client.generate = AsyncMock(side_effect=mock_generate)
+        mock_llm_client.chat = AsyncMock(side_effect=mock_chat)
 
         judge = LLMJudge(mock_llm_client)
         judgment = await judge.judge_result(sample_result_data, "Test prompt")
@@ -171,9 +177,18 @@ class TestLLMJudge:
         self, mock_llm_client, sample_result_data
     ):
         """Test handling of malformed LLM responses."""
-        # Mock malformed JSON response
-        mock_response = LLMResponse(content="This is not valid JSON")
-        mock_llm_client.generate = AsyncMock(return_value=mock_response)
+
+        # Mock malformed JSON responses for criteria and valid summary
+        def mock_chat(messages, model=None):
+            # Check if this is a summary request
+            if len(messages) > 0 and "overall summary" in messages[-1].content:
+                return LLMResponse(
+                    content="Agent had parsing errors but attempted the task."
+                )
+            else:
+                return LLMResponse(content="This is not valid JSON")
+
+        mock_llm_client.chat = AsyncMock(side_effect=mock_chat)
 
         judge = LLMJudge(mock_llm_client)
 
