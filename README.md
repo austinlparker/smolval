@@ -4,12 +4,11 @@ A lightweight Python application for evaluating MCP (Model Context Protocol) ser
 
 ## ✨ Features
 
-- **LLM-Driven Evaluation**: Uses ReAct pattern with LLM agents to test MCP servers
-- **Multiple LLM Providers**: Supports Anthropic Claude, OpenAI, and Ollama
-- **Batch Processing**: Evaluate multiple prompts and compare different servers
-- **Rich Output Formats**: Results in JSON, CSV, Markdown, and HTML
-- **Docker Support**: Containerized deployment with MCP server compatibility
-- **Comprehensive Testing**: Built-in test suite with high coverage
+- Evaluate MCP servers with LLM-guided reasoning and tooling.
+- Support for multiple LLM providers: Anthropic Claude, OpenAI, Google Gemini, and Ollama.
+- Batch evaluations and server comparisons.
+- Cross-provider model comparisons.
+- Outputs results in JSON, CSV, Markdown, and HTML.
 
 ## 🚀 Quick Start
 
@@ -60,6 +59,8 @@ Comprehensive documentation is available in the [`docs/`](docs/) directory:
 - **[Architecture](docs/architecture.md)** - Technical design and implementation details
 
 ## 🛠️ Commands
+
+## Prompts
 
 ### Single Evaluation
 ```bash

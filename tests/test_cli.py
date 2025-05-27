@@ -134,6 +134,32 @@ class TestCLI:
         assert "baseline" in analysis["total_token_usage"]
         assert "test" in analysis["total_token_usage"]
 
+    def test_compare_providers_command_help(self):
+        """Test compare-providers command help."""
+        from click.testing import CliRunner
+
+        from smolval.cli import main
+
+        runner = CliRunner()
+        result = runner.invoke(main, ["compare-providers", "--help"])
+
+        assert result.exit_code == 0
+        assert "baseline-config" in result.output.lower()
+        assert "test-config" in result.output.lower()
+        assert "different LLM providers" in result.output
+
+    def test_compare_providers_missing_args(self):
+        """Test compare-providers command with missing required arguments."""
+        from click.testing import CliRunner
+
+        from smolval.cli import main
+
+        runner = CliRunner()
+        result = runner.invoke(main, ["compare-providers", "some_dir"])
+
+        assert result.exit_code != 0
+        # Should complain about missing --baseline-config and --test-config
+
     def test_show_banner(self):
         """Test showing ASCII banner."""
         with patch("smolval.cli.click.echo") as mock_echo:

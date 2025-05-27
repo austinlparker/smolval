@@ -42,7 +42,9 @@ class MCPServerConfig(BaseModel):
 class LLMConfig(BaseModel):
     """Configuration for LLM provider."""
 
-    provider: str = Field(..., description="LLM provider (anthropic, openai, ollama)")
+    provider: str = Field(
+        ..., description="LLM provider (anthropic, openai, ollama, gemini)"
+    )
     model: str = Field(..., description="Model name")
     api_key: str | None = Field(
         default=None, description="API key for the provider (not required for ollama)"
@@ -57,21 +59,18 @@ class LLMConfig(BaseModel):
     @classmethod
     def valid_provider(cls, v: str) -> str:
         """Validate provider is supported."""
-        if v not in ("anthropic", "openai", "ollama"):
-            raise ValueError("Provider must be 'anthropic', 'openai', or 'ollama'")
+        if v not in ("anthropic", "openai", "ollama", "gemini"):
+            raise ValueError(
+                "Provider must be 'anthropic', 'openai', 'ollama', or 'gemini'"
+            )
         return v
 
-    @field_validator("api_key")
-    @classmethod
-    def api_key_required_for_cloud_providers(
-        cls, v: str | None, info: object
-    ) -> str | None:
+    @model_validator(mode="after")
+    def validate_api_key_for_cloud_providers(self) -> "LLMConfig":
         """Validate API key is provided for cloud providers."""
-        if hasattr(info, "data") and "provider" in info.data:
-            provider = info.data["provider"]
-            if provider in ("anthropic", "openai") and not v:
-                raise ValueError(f"API key is required for {provider}")
-        return v
+        if self.provider in ("anthropic", "openai", "gemini") and not self.api_key:
+            raise ValueError(f"API key is required for {self.provider}")
+        return self
 
     @field_validator("temperature")
     @classmethod

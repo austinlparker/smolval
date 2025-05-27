@@ -417,3 +417,167 @@ class TestAgent:
         assert agent.conversation_history[0].content == "Hello"
         assert agent.conversation_history[1].role == "assistant"
         assert agent.conversation_history[2].content == "How are you?"
+
+    @pytest.mark.asyncio
+    async def test_error_recovery_token_limit(
+        self, agent_config: Config, mock_llm_client: Mock, mock_mcp_manager: Mock
+    ) -> None:
+        """Test agent error recovery for token limit errors with smart memory management."""
+        agent = Agent(agent_config, mock_llm_client, mock_mcp_manager)
+
+        # Simulate a conversation that's already long enough to need truncation
+        for i in range(5):
+            agent._add_message("user", f"Previous message {i}")
+            agent._add_message("assistant", f"Previous response {i}")
+
+        # First call raises token limit error, second call succeeds with recovery
+        responses = [
+            Exception(
+                "Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'prompt is too long: 205141 tokens > 200000 maximum'}}"
+            ),
+            Mock(
+                content="With the summarized context, I can now provide the answer: 42.",
+                tool_calls=[],
+                token_usage={
+                    "input_tokens": 10,
+                    "output_tokens": 12,
+                    "total_tokens": 22,
+                },
+                raw_response={"id": "test-recovery-response"},
+            ),
+        ]
+        mock_llm_client.chat = AsyncMock(side_effect=responses)
+
+        result = await agent.run("What is the answer?")
+
+        assert result.success is True
+        assert (
+            result.final_answer
+            == "With the summarized context, I can now provide the answer: 42."
+        )
+        assert result.total_iterations == 2
+        assert len(result.steps) == 2
+
+        # Check recovery step was added with smart memory management
+        recovery_step = result.steps[0]
+        assert "smart memory management" in recovery_step.thought
+        assert "intelligent summarization" in recovery_step.observation
+        assert "preserve key findings" in recovery_step.observation
+
+        # Check conversation was intelligently truncated (preserves structure)
+        # Should have: system+task messages + summary + recent context
+        assert len(agent.conversation_history) <= 5
+
+        # Verify smart truncation preserved important context
+        # Look for summary message
+        summary_found = any(
+            "summarized" in msg.content.lower() for msg in agent.conversation_history
+        )
+        assert summary_found, "Should contain a summary message"
+
+        # Check successful recovery step
+        success_step = result.steps[1]
+        assert success_step.action is None
+        assert "summarized context" in success_step.thought
+
+    @pytest.mark.asyncio
+    async def test_non_recoverable_error(
+        self, agent_config: Config, mock_llm_client: Mock, mock_mcp_manager: Mock
+    ) -> None:
+        """Test agent fails immediately on non-recoverable errors."""
+        agent = Agent(agent_config, mock_llm_client, mock_mcp_manager)
+
+        # API authentication error - not recoverable
+        error = Exception(
+            "Error code: 401 - {'type': 'error', 'error': {'type': 'authentication_error', 'message': 'Invalid API key'}}"
+        )
+        mock_llm_client.chat = AsyncMock(side_effect=error)
+
+        result = await agent.run("What is the answer?")
+
+        assert result.success is False
+        assert "Invalid API key" in result.error
+        assert result.total_iterations == 0  # Failed immediately
+        assert len(result.steps) == 0
+
+    @pytest.mark.asyncio
+    async def test_proactive_tool_size_management(
+        self, agent_config: Config, mock_llm_client: Mock, mock_mcp_manager: Mock
+    ) -> None:
+        """Test agent proactively prevents oversized tool calls."""
+        agent = Agent(agent_config, mock_llm_client, mock_mcp_manager)
+
+        # Simulate a conversation with enough content to trigger proactive management
+        for _ in range(10):
+            agent._add_message("user", "x" * 1000)  # Add some conversation history
+            agent._add_message("assistant", "y" * 1000)
+
+        # Set a lower token budget for testing to trigger the proactive management
+        agent._test_token_budget = 50000  # Much lower limit to ensure trigger
+
+        # Mock LLM requesting a tool that would exceed limits
+        from smolval.llm_client import ToolCall
+
+        # Create a large database query that would exceed token limits
+        large_query_tool = ToolCall(
+            id="call_1",
+            name="query",  # This tool is estimated to return 100k tokens
+            arguments={"sql": "SELECT * FROM large_table"},
+        )
+
+        mock_response = Mock()
+        mock_response.content = "I'll query the database to get all the data"
+        mock_response.tool_calls = [large_query_tool]
+        mock_response.token_usage = {
+            "input_tokens": 10,
+            "output_tokens": 5,
+            "total_tokens": 15,
+        }
+        mock_response.raw_response = {"id": "test-response-1"}
+
+        # Second response after getting guidance
+        refined_response = Mock()
+        refined_response.content = (
+            "Based on the guidance, I'll use a more focused query with LIMIT."
+        )
+        refined_response.tool_calls = []
+        refined_response.token_usage = {
+            "input_tokens": 12,
+            "output_tokens": 8,
+            "total_tokens": 20,
+        }
+        refined_response.raw_response = {"id": "test-response-2"}
+
+        mock_llm_client.chat = AsyncMock(side_effect=[mock_response, refined_response])
+
+        # Mock execute_tool as async (shouldn't be called due to proactive management)
+        # but set it up properly in case it does get called
+        from smolval.mcp_client import MCPToolResult
+
+        mock_result = MCPToolResult(
+            tool_name="query",
+            server_name="test",
+            content="Unexpected execution",
+            error="Mock should not have been called",
+        )
+        mock_mcp_manager.execute_tool = AsyncMock(return_value=mock_result)
+
+        result = await agent.run("Get all database records")
+
+        assert result.success is True
+        assert result.total_iterations == 2
+        assert len(result.steps) == 2
+
+        # Check first step provided guidance instead of executing the tool
+        guidance_step = result.steps[0]
+        assert guidance_step.action == "query"
+        assert "would likely return too much data" in guidance_step.observation
+        assert "Add LIMIT clauses" in guidance_step.observation
+        assert "SELECT *" in guidance_step.observation
+
+        # Check LLM adjusted approach in second iteration
+        final_step = result.steps[1]
+        assert "more focused query" in final_step.thought
+
+        # Verify that the tool was NOT called due to proactive management
+        mock_mcp_manager.execute_tool.assert_not_called()

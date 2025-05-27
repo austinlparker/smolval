@@ -1,0 +1,39 @@
+mcp_servers:
+  # No API key required - basic file operations
+  - name: "filesystem"
+    command: ["npx", "@modelcontextprotocol/server-filesystem", "."]
+    env: {}
+  
+  # No API key required - web content fetching
+  - name: "fetch"
+    command: ["uvx", "mcp-server-fetch"]
+    env: {}
+  
+  # No API key required - local database (Docker-based)
+  # - name: "sqlite"
+  #   command: ["docker", "run", "--rm", "-i", "mcp/sqlite", "--db-path", "/tmp/data.db"]
+  #   env: {}
+
+  # Optional servers requiring API keys (comment out if not needed)
+  # - name: "brave_search" 
+  #   command: ["npx", "@modelcontextprotocol/server-brave-search"]
+  #   env:
+  #     BRAVE_API_KEY: "${BRAVE_API_KEY}"
+  # - name: "github"
+  #   command: ["npx", "@modelcontextprotocol/server-github"]
+  #   env:
+  #     GITHUB_PERSONAL_ACCESS_TOKEN: "${GITHUB_TOKEN}"
+
+llm:
+  provider: "gemini"
+  model: "gemini-2.0-flash"  # Latest stable Gemini 2.0 Flash model
+  # Alternative models:
+  # model: "gemini-2.5-flash-preview-04-17"  # Gemini 2.5 Flash preview
+  # model: "gemini-1.5-pro-latest"  # Gemini 1.5 Pro latest
+  # model: "gemini-1.5-flash-latest"  # Gemini 1.5 Flash latest
+  api_key: "${GEMINI_API_KEY}"  # Set GEMINI_API_KEY environment variable (or LLM_GEMINI_KEY)
+  temperature: 0.1
+
+evaluation:
+  timeout_seconds: 60
+  max_iterations: 10

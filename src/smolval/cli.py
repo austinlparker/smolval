@@ -476,6 +476,265 @@ def compare(
     asyncio.run(_run_compare(baseline, test, prompts_dir, config, output_dir, run_name))
 
 
+@main.command()
+@click.option("--baseline-config", required=True, help="Baseline provider config file")
+@click.option("--test-config", required=True, help="Test provider config file")
+@click.argument("prompts_dir", type=click.Path(exists=True))
+@click.option("--output-dir", help="Output directory for comparison results")
+@click.option("--run-name", help="Name for this comparison run")
+@click.pass_context
+def compare_providers(
+    ctx: click.Context,
+    baseline_config: str,
+    test_config: str,
+    prompts_dir: str,
+    output_dir: str,
+    run_name: str,
+) -> None:
+    """Compare performance between different LLM providers."""
+    # Show banner unless disabled
+    if not ctx.obj.get("no_banner", False):
+        _show_banner()
+
+    asyncio.run(
+        _run_provider_compare(
+            baseline_config, test_config, prompts_dir, output_dir, run_name
+        )
+    )
+
+
+async def _run_provider_compare(
+    baseline_config_path: str,
+    test_config_path: str,
+    prompts_dir: str,
+    output_dir: str,
+    run_name: str,
+) -> None:
+    """Run provider comparison asynchronously."""
+    try:
+        # Load configurations
+        click.echo(f"Loading baseline config from: {baseline_config_path}")
+        baseline_config = Config.from_yaml(Path(baseline_config_path))
+
+        click.echo(f"Loading test config from: {test_config_path}")
+        test_config = Config.from_yaml(Path(test_config_path))
+
+        # Find all prompt files
+        prompts_path = Path(prompts_dir)
+        prompt_files = list(prompts_path.glob("*.txt")) + list(
+            prompts_path.glob("*.md")
+        )
+
+        if not prompt_files:
+            raise click.ClickException(f"No prompt files found in {prompts_dir}")
+
+        click.echo(f"Found {len(prompt_files)} prompt files")
+
+        baseline_provider = (
+            f"{baseline_config.llm.provider}:{baseline_config.llm.model}"
+        )
+        test_provider = f"{test_config.llm.provider}:{test_config.llm.model}"
+        click.echo(f"Comparing: {baseline_provider} vs {test_provider}")
+
+        # Run evaluations for both providers
+        comparison_results = []
+
+        for config_name, config in [
+            ("baseline", baseline_config),
+            ("test", test_config),
+        ]:
+            provider_name = f"{config.llm.provider}:{config.llm.model}"
+            click.echo(f"\n--- Running evaluations for {provider_name} ---")
+            mcp_manager = None
+
+            try:
+                # Initialize components
+                llm_client = LLMClient(config.llm)
+                mcp_manager = MCPClientManager()
+
+                # Connect to all MCP servers for this config
+                for srv_cfg in config.mcp_servers:
+                    await mcp_manager.connect(srv_cfg)
+
+                agent = Agent(config, llm_client, mcp_manager)
+
+                # Run evaluations
+                provider_results = []
+                for i, prompt_file in enumerate(prompt_files, 1):
+                    click.echo(f"  [{i}/{len(prompt_files)}] {prompt_file.name}")
+
+                    try:
+                        # Load prompt
+                        with open(prompt_file) as f:
+                            prompt = f.read().strip()
+
+                        # Run evaluation
+                        result = await agent.run(prompt)
+
+                        provider_results.append(
+                            {
+                                "prompt_file": str(prompt_file.name),
+                                "prompt": prompt,
+                                "success": result.success,
+                                "final_answer": result.final_answer,
+                                "iterations": result.total_iterations,
+                                "execution_time": result.execution_time_seconds,
+                                "error": result.error,
+                                "steps": len(result.steps),
+                                "failed_tool_calls": result.failed_tool_calls,
+                                "token_usage": result.token_usage,
+                                "detailed_steps": [
+                                    step.model_dump() for step in result.steps
+                                ],
+                                "llm_responses": result.llm_responses,
+                            }
+                        )
+
+                        status = "✅" if result.success else "❌"
+                        click.echo(f"    {status} {result.execution_time_seconds:.2f}s")
+
+                    except Exception as e:
+                        click.echo(f"    ❌ Error: {e}")
+                        provider_results.append(
+                            {
+                                "prompt_file": str(prompt_file.name),
+                                "prompt": prompt,
+                                "success": False,
+                                "final_answer": "",
+                                "iterations": 0,
+                                "execution_time": 0.0,
+                                "error": str(e),
+                                "steps": 0,
+                                "failed_tool_calls": 0,
+                                "token_usage": None,
+                                "detailed_steps": [],
+                                "llm_responses": [],
+                            }
+                        )
+
+                comparison_results.append(
+                    {
+                        "provider": provider_name,
+                        "config_name": config_name,
+                        "results": provider_results,
+                    }
+                )
+
+            except Exception as e:
+                click.echo(f"❌ Provider {provider_name} failed: {e}")
+                # Add empty results for failed provider
+                comparison_results.append(
+                    {
+                        "provider": provider_name,
+                        "config_name": config_name,
+                        "results": [],
+                    }
+                )
+
+            finally:
+                # Clean up MCP connections
+                if mcp_manager is not None:
+                    try:
+                        await asyncio.wait_for(mcp_manager.close(), timeout=5.0)
+                    except Exception as cleanup_error:
+                        click.echo(f"Warning: MCP cleanup error: {cleanup_error}")
+
+        # Analyze results - handle cases where one or both providers failed
+        if len(comparison_results) >= 1:
+            # Ensure we have baseline and test results, even if empty
+            if len(comparison_results) == 1:
+                # Only one provider completed, create empty results for the other
+                completed_result = comparison_results[0]
+                if completed_result["config_name"] == "baseline":
+                    baseline_results: list = completed_result["results"]  # type: ignore[assignment]
+                    test_results: list = []
+                    baseline_provider_name: str = completed_result["provider"]  # type: ignore[assignment]
+                    test_provider_name: str = (
+                        f"{test_config.llm.provider}:{test_config.llm.model}"
+                    )
+                else:
+                    baseline_results = []
+                    test_results = completed_result["results"]  # type: ignore[assignment]
+                    baseline_provider_name = (
+                        f"{baseline_config.llm.provider}:{baseline_config.llm.model}"
+                    )
+                    test_provider_name = completed_result["provider"]  # type: ignore[assignment]
+            else:
+                # Both providers attempted (may have failed)
+                baseline_results = comparison_results[0]["results"]  # type: ignore[index,assignment]
+                test_results = comparison_results[1]["results"]  # type: ignore[index,assignment]
+                baseline_provider_name = comparison_results[0]["provider"]  # type: ignore[index,assignment]
+                test_provider_name = comparison_results[1]["provider"]  # type: ignore[index,assignment]
+
+            # Analyze comparison (handles empty results gracefully)
+            analysis = _analyze_comparison(
+                baseline_provider_name, test_provider_name, baseline_results, test_results  # type: ignore[arg-type]
+            )
+
+            # Generate output
+            base_dir = output_dir or "results"
+            output_manager = OutputManager(base_dir)
+
+            # Create run directory
+            comparison_run_name = (
+                run_name
+                or f"provider_comparison_{baseline_config.llm.provider}_vs_{test_config.llm.provider}"
+            )
+            output_manager.create_run_directory(comparison_run_name)
+
+            # Prepare comparison data with failure information
+            comparison_data = {
+                "baseline_server": baseline_provider_name,  # Match results.py expectations
+                "test_server": test_provider_name,  # Match results.py expectations
+                "baseline_config": baseline_config_path,
+                "test_config": test_config_path,
+                "analysis": analysis,
+                "detailed_results": {
+                    baseline_provider_name: baseline_results,
+                    test_provider_name: test_results,
+                },
+                "provider_failures": {
+                    "baseline_failed": len(baseline_results) == 0
+                    and len(comparison_results) >= 2,
+                    "test_failed": len(test_results) == 0
+                    and len(comparison_results) >= 2,
+                },
+                "timestamp": time.time(),
+            }
+
+            # Write comparison results
+            output_files = output_manager.write_comparison_results(
+                comparison_data, comparison_run_name
+            )
+
+            click.echo(
+                f"\nComparison results written to: {output_manager.get_run_directory()}"
+            )
+            for format_type, file_path in output_files.items():
+                click.echo(f"  {format_type.upper()}: {file_path}")
+
+            # Print summary with failure information
+            if len(baseline_results) == 0:
+                click.echo(
+                    f"\n⚠️  Baseline provider ({baseline_provider_name}) failed completely"
+                )
+            if len(test_results) == 0:
+                click.echo(
+                    f"\n⚠️  Test provider ({test_provider_name}) failed completely"
+                )
+
+            _print_comparison_summary(analysis)
+
+        else:
+            click.echo(
+                "❌ Could not complete comparison - no results from either provider"
+            )
+
+    except Exception as e:
+        click.echo(f"❌ Provider comparison failed: {e}")
+        raise click.ClickException(str(e)) from e
+
+
 async def _run_compare(
     baseline: str,
     test: str,
@@ -670,22 +929,23 @@ def _analyze_comparison(
     baseline: str, test: str, baseline_results: list, test_results: list
 ) -> dict:
     """Analyze comparison between two servers."""
-    baseline_success = sum(1 for r in baseline_results if r["success"])
-    test_success = sum(1 for r in test_results if r["success"])
-    total = len(baseline_results)
+    baseline_success = sum(1 for r in baseline_results if r.get("success", False))
+    test_success = sum(1 for r in test_results if r.get("success", False))
+    # Use max of both result lengths to handle cases where one provider failed completely
+    total = max(len(baseline_results), len(test_results), 1)
 
     baseline_avg_time = sum(
-        r["execution_time"] for r in baseline_results if r["success"]
+        r.get("execution_time", 0) for r in baseline_results if r.get("success", False)
     ) / max(baseline_success, 1)
     test_avg_time = sum(
-        r["execution_time"] for r in test_results if r["success"]
+        r.get("execution_time", 0) for r in test_results if r.get("success", False)
     ) / max(test_success, 1)
 
     baseline_avg_iterations = sum(
-        r["iterations"] for r in baseline_results if r["success"]
+        r.get("iterations", 0) for r in baseline_results if r.get("success", False)
     ) / max(baseline_success, 1)
     test_avg_iterations = sum(
-        r["iterations"] for r in test_results if r["success"]
+        r.get("iterations", 0) for r in test_results if r.get("success", False)
     ) / max(test_success, 1)
 
     # Calculate failed tool calls
@@ -722,18 +982,73 @@ def _analyze_comparison(
         },
         "total_token_usage": {baseline: baseline_total_tokens, test: test_total_tokens},
         "winner": {
-            "success_rate": baseline if baseline_success >= test_success else test,
-            "speed": baseline if baseline_avg_time <= test_avg_time else test,
+            "success_rate": (
+                "tie"
+                if baseline_success == test_success
+                else baseline if baseline_success > test_success else test
+            ),
+            "speed": (
+                "tie"
+                if baseline_success == 0 and test_success == 0
+                else (
+                    "tie"
+                    if baseline_success > 0
+                    and test_success > 0
+                    and abs(baseline_avg_time - test_avg_time) < 0.1
+                    else (
+                        baseline
+                        if test_success == 0
+                        or (baseline_success > 0 and baseline_avg_time <= test_avg_time)
+                        else test
+                    )
+                )
+            ),
             "efficiency": (
-                baseline if baseline_avg_iterations <= test_avg_iterations else test
+                "tie"
+                if baseline_success == 0 and test_success == 0
+                else (
+                    "tie"
+                    if baseline_success > 0
+                    and test_success > 0
+                    and baseline_avg_iterations == test_avg_iterations
+                    else (
+                        baseline
+                        if test_success == 0
+                        or (
+                            baseline_success > 0
+                            and baseline_avg_iterations <= test_avg_iterations
+                        )
+                        else test
+                    )
+                )
             ),
             "reliability": (
-                baseline if baseline_failed_tools <= test_failed_tools else test
+                "tie"
+                if len(baseline_results) == 0 and len(test_results) == 0
+                else (
+                    "tie"
+                    if len(baseline_results) > 0
+                    and len(test_results) > 0
+                    and baseline_failed_tools == test_failed_tools
+                    else (
+                        baseline
+                        if len(test_results) == 0
+                        or (
+                            len(baseline_results) > 0
+                            and baseline_failed_tools <= test_failed_tools
+                        )
+                        else test
+                    )
+                )
             ),
             "token_efficiency": (
-                baseline
-                if (baseline_total_tokens or 0) <= (test_total_tokens or 0)
-                else test
+                "tie"
+                if (baseline_total_tokens or 0) == (test_total_tokens or 0)
+                else (
+                    baseline
+                    if (baseline_total_tokens or 0) < (test_total_tokens or 0)
+                    else test
+                )
             ),
         },
     }
