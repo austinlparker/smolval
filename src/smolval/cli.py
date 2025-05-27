@@ -473,7 +473,9 @@ async def _run_batch(
                 1 for r in results if bool(r.get("result", {}).get("success", False))
             ),
             "failed": sum(
-                1 for r in results if not bool(r.get("result", {}).get("success", False))
+                1
+                for r in results
+                if not bool(r.get("result", {}).get("success", False))
             ),
             "results": results,
             "metadata": {
@@ -504,7 +506,7 @@ async def _run_batch(
         click.echo(f"Total prompts: {summary['total_prompts']}")
         click.echo(f"Successful: {summary['successful']} ✅")
         click.echo(f"Failed: {summary['failed']} ❌")
-        total_prompts = summary["total_prompts"] 
+        total_prompts = summary["total_prompts"]
         successful = summary["successful"]
         assert isinstance(total_prompts, int)
         assert isinstance(successful, int)
