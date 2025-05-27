@@ -59,8 +59,8 @@ jobs:
         # Start Ollama in background
         ollama serve &
         sleep 10
-        # Pull a small model for testing
-        ollama pull gemma2:2b
+        # Pull the model expected by tests
+        ollama pull gemma3:1b-it-qat
     
     - name: Run integration tests with real APIs
       run: |
