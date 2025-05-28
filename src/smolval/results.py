@@ -984,66 +984,78 @@ class ResultsFormatter:
         if body_match:
             content = body_match.group(1)
 
-            # Add judgment section
+            # Add judgment section with proper styling
+            score_class = (
+                "success"
+                if judgment["overall_score"] > 0.7
+                else "warning" if judgment["overall_score"] > 0.4 else "error"
+            )
             judgment_html = f"""
-        <h2>🎯 LLM-as-Judge Evaluation</h2>
+        <div class="judge-panel">
+            <div class="judge-header">
+                <h2 style="color: white; margin: 0; font-size: 1.5rem; font-weight: 700;">🎯 LLM-as-Judge Evaluation</h2>
+                <div class="judge-score-badge {score_class}">
+                    {judgment['overall_score']:.2f}/1.0
+                </div>
+            </div>
 
-        <div class="summary-item">
-            <span class="key">Overall Quality Score:</span>
-            <span class="value" style="font-weight: bold; color: {'#22c55e' if judgment['overall_score'] > 0.7 else '#f59e0b' if judgment['overall_score'] > 0.4 else '#ef4444'};">
-                {judgment['overall_score']:.2f}/1.0
-            </span>
-        </div>
+            <div class="judge-summary">
+                {judgment['summary']}
+            </div>
 
-        <div class="content-line" style="margin: 12px 0; padding: 12px; background: #f8fafc; border-radius: 6px;">
-            {judgment['summary']}
-        </div>
-
-        <h3>Detailed Scores</h3>
-        <div style="display: grid; gap: 8px; margin: 12px 0;">
+            <div class="judge-scores-grid">
+                <h3 style="margin: 0 0 1rem 0; color: var(--neutral-700); font-size: 1.125rem;">Detailed Scores</h3>
 """
 
             for score in judgment["scores"]:
-                score_color = (
-                    "#22c55e"
+                score_class = (
+                    "success"
                     if score["score"] > 0.7
-                    else "#f59e0b" if score["score"] > 0.4 else "#ef4444"
+                    else "warning" if score["score"] > 0.4 else "error"
                 )
                 judgment_html += f"""
-            <details class="subsection">
-                <summary class="h3">
-                    {score['criterion'].replace('_', ' ').title()}:
-                    <span style="color: {score_color}; font-weight: bold;">{score['score']:.2f}</span>
-                </summary>
-                <div class="content">
-                    <div class="content-line">{score['reasoning']}</div>
+                <div class="judge-criterion">
+                    <div class="judge-criterion-header">
+                        <span class="judge-criterion-name">{score['criterion'].replace('_', ' ').title()}</span>
+                        <div class="judge-criterion-score {score_class}">{score['score']:.2f}</div>
+                    </div>
+                    <div class="judge-criterion-reasoning">{score['reasoning']}</div>
                 </div>
-            </details>
 """
 
-            judgment_html += "</div>"
+            judgment_html += """
+            </div>
+        """
 
             if judgment.get("strengths"):
                 judgment_html += """
-        <h3>✅ Strengths</h3>
-        <div class="content">
+            <div class="judge-section">
+                <h3 class="judge-section-title">✅ Strengths</h3>
+                <div class="judge-list">
 """
                 for strength in judgment["strengths"]:
-                    judgment_html += (
-                        f'            <div class="list-item">{strength}</div>\n'
-                    )
-                judgment_html += "        </div>"
+                    judgment_html += f'                    <div class="judge-list-item success">{strength}</div>\n'
+                judgment_html += """
+                </div>
+            </div>
+"""
 
             if judgment.get("weaknesses"):
                 judgment_html += """
-        <h3>⚠️ Areas for Improvement</h3>
-        <div class="content">
+            <div class="judge-section">
+                <h3 class="judge-section-title">⚠️ Areas for Improvement</h3>
+                <div class="judge-list">
 """
                 for weakness in judgment["weaknesses"]:
-                    judgment_html += (
-                        f'            <div class="list-item">{weakness}</div>\n'
-                    )
-                judgment_html += "        </div>"
+                    judgment_html += f'                    <div class="judge-list-item warning">{weakness}</div>\n'
+                judgment_html += """
+                </div>
+            </div>
+"""
+
+            judgment_html += """
+        </div>
+"""
 
             # Replace the content in the original HTML
             full_html = standard_html.replace(

@@ -386,6 +386,140 @@
             max-height: 1000px;
         }
 
+        /* LLM Judge Evaluation Styles */
+        .judge-panel {
+            background: white;
+            border-radius: 12px;
+            box-shadow: var(--shadow-lg);
+            margin: 2rem 0;
+            overflow: hidden;
+        }
+
+        .judge-header {
+            background: linear-gradient(135deg, var(--info) 0%, var(--primary) 100%);
+            padding: 1.5rem 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .judge-score-badge {
+            padding: 0.5rem 1rem;
+            border-radius: 20px;
+            font-weight: 700;
+            font-size: 1.125rem;
+            color: white;
+        }
+
+        .judge-score-badge.success {
+            background: var(--success);
+        }
+
+        .judge-score-badge.warning {
+            background: var(--warning);
+        }
+
+        .judge-score-badge.error {
+            background: var(--error);
+        }
+
+        .judge-summary {
+            padding: 1.5rem 2rem;
+            background: var(--neutral-50);
+            border-bottom: 1px solid var(--neutral-200);
+            font-style: italic;
+            color: var(--neutral-700);
+            line-height: 1.6;
+        }
+
+        .judge-scores-grid {
+            padding: 2rem;
+        }
+
+        .judge-criterion {
+            background: var(--neutral-50);
+            border-radius: 8px;
+            padding: 1rem;
+            margin-bottom: 1rem;
+            border: 1px solid var(--neutral-200);
+        }
+
+        .judge-criterion-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0.75rem;
+        }
+
+        .judge-criterion-name {
+            font-weight: 600;
+            color: var(--neutral-700);
+            font-size: 1rem;
+        }
+
+        .judge-criterion-score {
+            padding: 0.25rem 0.75rem;
+            border-radius: 12px;
+            font-weight: 700;
+            font-size: 0.875rem;
+            color: white;
+        }
+
+        .judge-criterion-score.success {
+            background: var(--success);
+        }
+
+        .judge-criterion-score.warning {
+            background: var(--warning);
+        }
+
+        .judge-criterion-score.error {
+            background: var(--error);
+        }
+
+        .judge-criterion-reasoning {
+            color: var(--neutral-600);
+            font-size: 0.875rem;
+            line-height: 1.5;
+        }
+
+        .judge-section {
+            padding: 0 2rem 1.5rem 2rem;
+        }
+
+        .judge-section-title {
+            color: var(--neutral-700);
+            font-size: 1.125rem;
+            font-weight: 600;
+            margin-bottom: 1rem;
+        }
+
+        .judge-list {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .judge-list-item {
+            padding: 0.75rem 1rem;
+            border-radius: 6px;
+            font-size: 0.875rem;
+            line-height: 1.5;
+            border-left: 3px solid;
+        }
+
+        .judge-list-item.success {
+            background: var(--success-light);
+            border-left-color: var(--success);
+            color: var(--neutral-700);
+        }
+
+        .judge-list-item.warning {
+            background: var(--warning-light);
+            border-left-color: var(--warning);
+            color: var(--neutral-700);
+        }
+
         @media (max-width: 1024px) {
             .main-content {
                 grid-template-columns: 1fr;
@@ -395,6 +529,12 @@
             .timeline {
                 position: static;
                 max-height: 200px;
+            }
+
+            .judge-header {
+                flex-direction: column;
+                gap: 1rem;
+                text-align: center;
             }
         }
     </style>
@@ -446,7 +586,7 @@
             <div class="timeline">
                 <h3>🕐 Execution Timeline</h3>
                 {% for step in result.steps %}
-                <div class="timeline-item {{ 'has-action' if step.action else '' }} {{ 'has-error' if step.observation and 'error' in step.observation.lower() else '' }}" 
+                <div class="timeline-item {{ 'has-action' if step.action else '' }} {{ 'has-error' if step.tool_call_failed else '' }}" 
                      data-step="{{ loop.index0 }}" onclick="showStep({{ loop.index0 }})">
                     <div class="step-number">{{ loop.index }}</div>
                     <div class="step-info">
