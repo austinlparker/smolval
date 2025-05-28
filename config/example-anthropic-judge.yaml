@@ -1,0 +1,35 @@
+mcp_servers:
+  # No API key required - basic file operations
+  - name: "filesystem"
+    command: ["npx", "@modelcontextprotocol/server-filesystem", "."]
+    env: {}
+  
+  # No API key required - web content fetching
+  - name: "fetch"
+    command: ["uvx", "mcp-server-fetch"]
+    env: {}
+
+llm:
+  provider: "anthropic"
+  model: "claude-4-sonnet"  # Latest Claude 4 Sonnet for main evaluation
+  api_key: "${ANTHROPIC_API_KEY}"  # Set ANTHROPIC_API_KEY environment variable
+  temperature: 0.1
+
+evaluation:
+  timeout_seconds: 60
+  max_iterations: 10
+  
+  # LLM-as-judge configuration
+  judge:
+    enabled: true
+    model: "claude-3-sonnet-20240229"  # Use Claude 3 Sonnet for cost-effective judging
+    # Optional: use different provider for judging
+    # provider: "openai"
+    # model: "gpt-4"
+    
+    # Optional: customize criteria weights (must sum to 1.0)
+    # criteria_weights:
+    #   answer_quality: 0.4      # Default: 0.35
+    #   reasoning_quality: 0.3   # Default: 0.25  
+    #   process_efficiency: 0.2  # Default: 0.20
+    #   task_understanding: 0.1  # Default: 0.20

@@ -35,13 +35,22 @@ class ResultsFormatter:
         self, result_data: dict[str, Any], output_file: str | None = None
     ) -> str:
         """Format a single evaluation result."""
+        # Check if this is a judged result
+        is_judged = "judgment" in result_data and "original_result" in result_data
+
         if self.format_type == "json":
             return self._format_json(result_data, output_file)
         elif self.format_type == "csv":
+            if is_judged:
+                return self._format_judged_csv(result_data, output_file)
             return self._format_single_csv(result_data, output_file)
         elif self.format_type == "markdown":
+            if is_judged:
+                return self._format_judged_markdown(result_data, output_file)
             return self._format_single_markdown(result_data, output_file)
         elif self.format_type == "html":
+            if is_judged:
+                return self._format_judged_html(result_data, output_file)
             return self._format_single_html(result_data, output_file)
         else:
             raise ValueError(f"Unsupported format: {self.format_type}")
@@ -95,9 +104,9 @@ class ResultsFormatter:
             {
                 "prompt_file": result_data.get("metadata", {}).get("prompt_file", ""),
                 "success": result["success"],
-                "final_answer": result["final_answer"]
-                .replace("\n", " ")
-                .replace("\r", ""),
+                "final_answer": (
+                    result["final_answer"].replace("\n", " ").replace("\r", "")
+                ),
                 "total_iterations": result["total_iterations"],
                 "execution_time_seconds": result["execution_time_seconds"],
                 "failed_tool_calls": result.get("failed_tool_calls", 0),
@@ -125,9 +134,9 @@ class ResultsFormatter:
                         "prompt_file", ""
                     ),
                     "success": result["success"],
-                    "final_answer": result["final_answer"]
-                    .replace("\n", " ")
-                    .replace("\r", ""),
+                    "final_answer": (
+                        result["final_answer"].replace("\n", " ").replace("\r", "")
+                    ),
                     "total_iterations": result["total_iterations"],
                     "execution_time_seconds": result["execution_time_seconds"],
                     "failed_tool_calls": result.get("failed_tool_calls", 0),
@@ -154,7 +163,7 @@ class ResultsFormatter:
         test_results = comparison_data["detailed_results"][test]
 
         for _i, (b_result, t_result) in enumerate(
-            zip(baseline_results, test_results, strict=False)
+            zip(baseline_results, test_results, strict=True)
         ):
             csv_data.append(
                 {
@@ -855,3 +864,209 @@ class ResultsFormatter:
     </script>
 </body>
 </html>"""
+
+    def _format_judged_csv(
+        self, judged_data: dict[str, Any], output_file: str | None = None
+    ) -> str:
+        """Format judged result as CSV."""
+        original_result = judged_data["original_result"]
+        judgment = judged_data["judgment"]
+        result = original_result["result"]
+
+        # Create a flat structure for CSV including judgment scores
+        csv_data = [
+            {
+                "prompt_file": original_result.get("metadata", {}).get(
+                    "prompt_file", ""
+                ),
+                "success": result["success"],
+                "final_answer": (
+                    result["final_answer"].replace("\n", " ").replace("\r", "")
+                ),
+                "total_iterations": result["total_iterations"],
+                "execution_time_seconds": result["execution_time_seconds"],
+                "failed_tool_calls": result.get("failed_tool_calls", 0),
+                "error": result.get("error", ""),
+                "num_steps": len(result.get("steps", [])),
+                "timestamp": original_result.get("metadata", {}).get(
+                    "timestamp", time.time()
+                ),
+                # Judgment data
+                "overall_score": judgment["overall_score"],
+                "judgment_summary": judgment["summary"].replace("\n", " "),
+                "strengths": "; ".join(judgment.get("strengths", [])),
+                "weaknesses": "; ".join(judgment.get("weaknesses", [])),
+                **{
+                    f"{score['criterion']}_score": score["score"]
+                    for score in judgment["scores"]
+                },
+            }
+        ]
+
+        return self._write_csv(csv_data, output_file)
+
+    def _format_judged_markdown(
+        self, judged_data: dict[str, Any], output_file: str | None = None
+    ) -> str:
+        """Format judged result as Markdown."""
+        original_result = judged_data["original_result"]
+        judgment = judged_data["judgment"]
+
+        # First generate the standard result markdown
+        standard_markdown = self._format_single_markdown(original_result, None)
+
+        # Add judgment section
+        judgment_section = f"""
+
+## 🎯 LLM-as-Judge Evaluation
+
+### Overall Assessment
+**Quality Score: {judgment['overall_score']:.2f}/1.0**
+
+{judgment['summary']}
+
+### Detailed Scores
+
+| Criterion | Score | Reasoning |
+|-----------|--------|-----------|
+"""
+
+        for score in judgment["scores"]:
+            reasoning = (
+                score["reasoning"][:100] + "..."
+                if len(score["reasoning"]) > 100
+                else score["reasoning"]
+            )
+            judgment_section += f"| {score['criterion'].replace('_', ' ').title()} | {score['score']:.2f} | {reasoning} |\n"
+
+        if judgment.get("strengths"):
+            judgment_section += f"""
+### ✅ Strengths
+{chr(10).join(f'- {strength}' for strength in judgment['strengths'])}
+"""
+
+        if judgment.get("weaknesses"):
+            judgment_section += f"""
+### ⚠️ Areas for Improvement
+{chr(10).join(f'- {weakness}' for weakness in judgment['weaknesses'])}
+"""
+
+        if judgment.get("suggestions"):
+            judgment_section += f"""
+### 💡 Suggestions
+{chr(10).join(f'- {suggestion}' for suggestion in judgment['suggestions'])}
+"""
+
+        # Combine standard and judgment sections
+        full_markdown = standard_markdown + judgment_section
+
+        if output_file:
+            with open(output_file, "w") as f:
+                f.write(full_markdown)
+
+        return full_markdown
+
+    def _format_judged_html(
+        self, judged_data: dict[str, Any], output_file: str | None = None
+    ) -> str:
+        """Format judged result as HTML."""
+        original_result = judged_data["original_result"]
+        judgment = judged_data["judgment"]
+
+        # Generate standard HTML first
+        standard_html = self._format_single_html(original_result, None)
+
+        # Extract the content between <body> tags to inject judgment
+        body_match = re.search(
+            r'<div class="container">(.*?)</div>\s*<script>', standard_html, re.DOTALL
+        )
+
+        if body_match:
+            content = body_match.group(1)
+
+            # Add judgment section with proper styling
+            score_class = (
+                "success"
+                if judgment["overall_score"] > 0.7
+                else "warning" if judgment["overall_score"] > 0.4 else "error"
+            )
+            judgment_html = f"""
+        <div class="judge-panel">
+            <div class="judge-header">
+                <h2 style="color: white; margin: 0; font-size: 1.5rem; font-weight: 700;">🎯 LLM-as-Judge Evaluation</h2>
+                <div class="judge-score-badge {score_class}">
+                    {judgment['overall_score']:.2f}/1.0
+                </div>
+            </div>
+
+            <div class="judge-summary">
+                {judgment['summary']}
+            </div>
+
+            <div class="judge-scores-grid">
+                <h3 style="margin: 0 0 1rem 0; color: var(--neutral-700); font-size: 1.125rem;">Detailed Scores</h3>
+"""
+
+            for score in judgment["scores"]:
+                score_class = (
+                    "success"
+                    if score["score"] > 0.7
+                    else "warning" if score["score"] > 0.4 else "error"
+                )
+                judgment_html += f"""
+                <div class="judge-criterion">
+                    <div class="judge-criterion-header">
+                        <span class="judge-criterion-name">{score['criterion'].replace('_', ' ').title()}</span>
+                        <div class="judge-criterion-score {score_class}">{score['score']:.2f}</div>
+                    </div>
+                    <div class="judge-criterion-reasoning">{score['reasoning']}</div>
+                </div>
+"""
+
+            judgment_html += """
+            </div>
+        """
+
+            if judgment.get("strengths"):
+                judgment_html += """
+            <div class="judge-section">
+                <h3 class="judge-section-title">✅ Strengths</h3>
+                <div class="judge-list">
+"""
+                for strength in judgment["strengths"]:
+                    judgment_html += f'                    <div class="judge-list-item success">{strength}</div>\n'
+                judgment_html += """
+                </div>
+            </div>
+"""
+
+            if judgment.get("weaknesses"):
+                judgment_html += """
+            <div class="judge-section">
+                <h3 class="judge-section-title">⚠️ Areas for Improvement</h3>
+                <div class="judge-list">
+"""
+                for weakness in judgment["weaknesses"]:
+                    judgment_html += f'                    <div class="judge-list-item warning">{weakness}</div>\n'
+                judgment_html += """
+                </div>
+            </div>
+"""
+
+            judgment_html += """
+        </div>
+"""
+
+            # Replace the content in the original HTML
+            full_html = standard_html.replace(
+                body_match.group(1), content + judgment_html
+            )
+        else:
+            # Fallback if parsing fails
+            full_html = standard_html
+
+        if output_file:
+            with open(output_file, "w") as f:
+                f.write(full_html)
+
+        return full_html

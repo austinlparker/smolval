@@ -20,6 +20,7 @@ dependencies = [
     "python-dotenv>=1.0.0",
     "llm-gemini>=0.20",
     "tiktoken>=0.9.0",
+    "markdown-it-py>=3.0.0",
 ]
 
 [project.optional-dependencies]

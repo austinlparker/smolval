@@ -1,4 +1,5 @@
 version = 1
+revision = 1
 requires-python = ">=3.11"
 resolution-markers = [
     "python_full_version >= '3.13'",
@@ -1206,6 +1207,7 @@ dependencies = [
     { name = "llm" },
     { name = "llm-anthropic" },
     { name = "llm-gemini" },
+    { name = "markdown-it-py" },
     { name = "mcp" },
     { name = "pandas" },
     { name = "pydantic" },
@@ -1251,6 +1253,7 @@ requires-dist = [
     { name = "llm", specifier = ">=0.17.0" },
     { name = "llm-anthropic" },
     { name = "llm-gemini", specifier = ">=0.20" },
+    { name = "markdown-it-py", specifier = ">=3.0.0" },
     { name = "mcp", specifier = ">=1.0.0" },
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.5.0" },
     { name = "pandas", specifier = ">=2.0.0" },
@@ -1265,6 +1268,7 @@ requires-dist = [
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.0.290" },
     { name = "tiktoken", specifier = ">=0.9.0" },
 ]
+provides-extras = ["dev"]
 
 [package.metadata.requires-dev]
 dev = [

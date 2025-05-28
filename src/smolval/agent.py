@@ -24,6 +24,7 @@ class AgentStep(BaseModel):
     action: str | None = None
     action_input: dict[str, Any] | None = None
     observation: str | None = None
+    tool_call_failed: bool = False
     llm_response: dict[str, Any] | None = None
 
 
@@ -191,6 +192,7 @@ class Agent:
                                     action=tool_name,
                                     action_input=action_input,
                                     observation=f"Error executing tool: {str(tool_error)}",
+                                    tool_call_failed=True,
                                     llm_response={
                                         "content": response.content,
                                         "tool_calls": (
@@ -690,6 +692,7 @@ class Agent:
                 action=tool_name,
                 action_input=arguments,
                 observation=observation,
+                tool_call_failed=failed,
                 llm_response={
                     "content": llm_response.content,
                     "tool_calls": (
@@ -712,6 +715,7 @@ class Agent:
                 action=tool_name,
                 action_input=arguments,
                 observation=f"Unexpected error executing tool: {str(e)}",
+                tool_call_failed=True,
                 llm_response={
                     "content": llm_response.content,
                     "tool_calls": (

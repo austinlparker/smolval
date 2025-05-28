@@ -81,6 +81,21 @@ class LLMConfig(BaseModel):
         return v
 
 
+class JudgeConfig(BaseModel):
+    """Configuration for LLM-as-judge evaluation."""
+
+    enabled: bool = Field(default=False, description="Enable LLM-as-judge evaluation")
+    model: str | None = Field(
+        default=None, description="Model to use for judgment (uses main LLM if None)"
+    )
+    provider: str | None = Field(
+        default=None, description="Provider to use for judgment (uses main LLM if None)"
+    )
+    criteria_weights: dict[str, float] | None = Field(
+        default=None, description="Custom weights for judgment criteria"
+    )
+
+
 class EvaluationConfig(BaseModel):
     """Configuration for evaluation parameters."""
 
@@ -88,6 +103,9 @@ class EvaluationConfig(BaseModel):
     max_iterations: int = Field(default=10, description="Maximum agent loop iterations")
     output_format: str = Field(
         default="json", description="Output format (json, csv, markdown)"
+    )
+    judge: JudgeConfig = Field(
+        default_factory=JudgeConfig, description="LLM-as-judge settings"
     )
 
     @field_validator("timeout_seconds")
