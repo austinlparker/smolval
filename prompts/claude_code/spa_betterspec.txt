@@ -1,0 +1,21 @@
+Create a single-page application (SPA) guest book. Place it in a folder named 'guestbook-spa'.The app should have a clean, accessible interface that allows users to:
+	•	Enter their name
+	•	Leave a message
+
+Submitted entries should appear instantly in a list below the form, showing the name, message, and the submission time. No authentication or backend is needed—keep everything in memory.
+
+Technical and Style Guidance:
+	•	CSS:
+	•	Use Tailwind CSS utility classes for styling, or, if not available, use BEM naming conventions with vanilla CSS.
+	•	The UI should be visually appealing and accessible (good contrast, focus styles, readable fonts).
+	•	Layout should be responsive and center the guest book on the page.
+	•	Add spacing (padding/margin) to separate the form from the entry list.
+	•	Style form controls and the submit button with clear hover/focus states.
+	•	JavaScript:
+	•	Use functional, component-based patterns (e.g., React functional components and hooks if using React).
+	•	Validate the form so both fields are required before submission.
+	•	After submission, clear the form and show a short success message.
+	•	Prefer idiomatic, modern JavaScript (ES6+).
+
+Bonus:
+	•	Store entries in localStorage so the list persists on page reload.

@@ -39,6 +39,9 @@ uv run python -m smolval.cli eval prompts/simple_test.txt -c config/ollama.yaml 
 
 # Use Google Gemini (requires llm-gemini plugin and GEMINI_API_KEY)
 uv run python -m smolval.cli eval prompts/simple_test.txt -c config/example-gemini.yaml --format markdown
+
+# Use Claude Code agent (requires claude CLI installed and ANTHROPIC_API_KEY)
+uv run python -m smolval.cli eval prompts/simple_test.txt -c config/example-claude-code.yaml --format markdown
 ```
 
 #### Docker
@@ -85,6 +88,12 @@ uv run pytest --cov=smolval
 # Run specific test file
 uv run pytest tests/test_agent.py
 
+# Run by test markers (defined in pyproject.toml)
+uv run pytest -m "not integration and not slow"  # Fast unit tests only
+uv run pytest -m integration                     # Integration tests only
+uv run pytest -m "requires_docker"               # Docker-dependent tests
+uv run pytest -m "requires_api_keys"             # Tests requiring real API keys
+
 # Run Ollama integration tests (requires Ollama running locally)
 uv run pytest tests/test_integration_ollama.py -m integration
 ```
@@ -121,10 +130,11 @@ This ensures consistent code quality and prevents formatting issues in commits.
 
 ### Component Relationships
 1. **CLI** (`cli.py`) → **Config** (`config.py`) → **Agent** (`agent.py`) workflow
-2. **Agent** orchestrates **LLMClient** + **MCPClientManager** in ReAct loop
-3. **MCPClientManager** (`mcp_client.py`) discovers tools from multiple MCP servers, presents unified interface
-4. **LLMClient** (`llm_client.py`) provides unified interface for Anthropic Claude, OpenAI, Google Gemini, and Ollama models with provider-specific function calling
-5. **ResultsFormatter** (`results.py`) handles multi-format output with Jinja2 templating
+2. **Agent** orchestrates **LLMClient** + **MCPClientManager** in ReAct loop (ReAct agent)
+3. **ClaudeCodeAgent** uses Claude Code CLI subprocess with MCP server management (Claude Code agent)
+4. **MCPClientManager** (`mcp_client.py`) discovers tools from multiple MCP servers, presents unified interface
+5. **LLMClient** (`llm_client.py`) provides unified interface for Anthropic Claude, OpenAI, Google Gemini, and Ollama models with provider-specific function calling
+6. **ResultsFormatter** (`results.py`) handles multi-format output with Jinja2 templating
 
 ### Key Design Patterns
 - **ReAct Agent Loop**: Step-by-step execution with thought, action, observation cycles
@@ -146,6 +156,7 @@ The `MCPClientManager` uses proper async context managers with `AsyncExitStack` 
   - `config/example-openai.yaml` (GPT-4o models)
   - `config/example-gemini.yaml` (Google Gemini models) 
   - `config/example-ollama.yaml` (Ollama with gemma3:1b-it-qat)
+  - `config/example-claude-code.yaml` (Claude Code agent)
 - **Required Environment**: `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, or `GEMINI_API_KEY` (not required for Ollama)
 - **LLM Library**: Uses `datasette llm` with automatic plugin loading for providers
 - **Plugin Requirements**: Install `llm-gemini` for Google Gemini support
@@ -159,11 +170,21 @@ The `MCPClientManager` uses proper async context managers with `AsyncExitStack` 
 ## Important Implementation Details
 
 ### Agent Execution Flow
-The agent runs a ReAct loop with:
+
+#### ReAct Agent
+The ReAct agent runs a ReAct loop with:
 1. **Thought**: LLM reasoning about next action
 2. **Action**: Tool call with arguments
 3. **Observation**: Tool execution result
 4. Continues until task completion or max iterations (15)
+
+#### Claude Code Agent
+The Claude Code agent uses Claude Code CLI:
+1. **Setup**: Configures MCP servers using `claude mcp add` commands
+2. **Permissions**: Uses `--allowedTools` and `--disallowedTools` flags for secure development permissions (file creation, npm, git)
+3. **Execution**: Runs `claude -p "prompt" --output-format stream-json --allowedTools [...] --disallowedTools [...]`
+4. **Parsing**: Processes streaming JSON output into AgentResult format
+5. **Cleanup**: Removes temporary MCP server configurations
 
 ### Tool Call Processing
 Tool calls from LLM responses are processed as Pydantic `ToolCall` objects, then executed via the appropriate MCP server through `MCPClientManager.execute_tool()`.

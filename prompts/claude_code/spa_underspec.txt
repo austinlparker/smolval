@@ -1,0 +1,1 @@
+Please generate a single page application that acts as a guest book. Place it in a folder named 'guestbook'. People should be able to enter their names and leave messages.

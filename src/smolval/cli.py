@@ -11,7 +11,7 @@ from typing import Any
 
 import click
 
-from .agent import Agent
+from .agent import Agent, ClaudeCodeAgent
 from .config import Config
 from .judge import JudgedResult, LLMJudge
 from .llm_client import LLMClient
@@ -53,6 +53,16 @@ def _show_banner() -> None:
     🤖 A lightweight MCP server evaluation agent
     """
     click.echo(click.style(banner, fg="cyan", bold=True))
+
+
+def _create_agent(config: Config, llm_client: LLMClient | None, mcp_manager: MCPClientManager) -> Agent | ClaudeCodeAgent:
+    """Create the appropriate agent based on configuration."""
+    if config.evaluation.agent_type == "claude_code":
+        return ClaudeCodeAgent(config, mcp_manager)
+    else:
+        if llm_client is None:
+            raise ValueError("LLM client required for ReAct agent")
+        return Agent(config, llm_client, mcp_manager)
 
 
 @click.group()
@@ -147,19 +157,22 @@ async def _run_eval(
             prompt = f.read().strip()
 
         # Initialize components
-        click.echo("Initializing LLM client...")
-        llm_client = LLMClient(config.llm)
+        llm_client = None
+        if config.evaluation.agent_type != "claude_code":
+            click.echo("Initializing LLM client...")
+            llm_client = LLMClient(config.llm)
 
         click.echo("Initializing MCP client manager...")
         mcp_manager = MCPClientManager()
 
         # Connect to MCP servers (suppress server startup noise)
-        click.echo("Connecting to MCP servers...")
-        await _connect_mcp_servers_silently(mcp_manager, config.mcp_servers, debug)
+        if config.evaluation.agent_type != "claude_code":
+            click.echo("Connecting to MCP servers...")
+            await _connect_mcp_servers_silently(mcp_manager, config.mcp_servers, debug)
 
         # Initialize agent
-        click.echo("Initializing agent...")
-        agent = Agent(config, llm_client, mcp_manager)
+        click.echo(f"Initializing {config.evaluation.agent_type} agent...")
+        agent = _create_agent(config, llm_client, mcp_manager)
 
         # Run evaluation with progress indicator
         click.echo("Running evaluation...")
@@ -388,18 +401,21 @@ async def _run_batch(
             output_path.mkdir(parents=True, exist_ok=True)
 
         # Initialize components once
-        click.echo("Initializing LLM client...")
-        llm_client = LLMClient(config.llm)
+        llm_client = None
+        if config.evaluation.agent_type != "claude_code":
+            click.echo("Initializing LLM client...")
+            llm_client = LLMClient(config.llm)
 
         click.echo("Initializing MCP client manager...")
         mcp_manager = MCPClientManager()
 
         # Connect to MCP servers (suppress server startup noise)
-        click.echo("Connecting to MCP servers...")
-        await _connect_mcp_servers_silently(mcp_manager, config.mcp_servers, debug)
+        if config.evaluation.agent_type != "claude_code":
+            click.echo("Connecting to MCP servers...")
+            await _connect_mcp_servers_silently(mcp_manager, config.mcp_servers, debug)
 
         # Initialize agent
-        agent = Agent(config, llm_client, mcp_manager)
+        agent = _create_agent(config, llm_client, mcp_manager)
 
         # Run evaluations
         results: list[dict[str, Any]] = []
@@ -636,14 +652,17 @@ async def _run_provider_compare(
 
             try:
                 # Initialize components
-                llm_client = LLMClient(config.llm)
+                llm_client = None
+                if config.evaluation.agent_type != "claude_code":
+                    llm_client = LLMClient(config.llm)
                 mcp_manager = MCPClientManager()
 
                 # Connect to all MCP servers for this config
-                for srv_cfg in config.mcp_servers:
-                    await mcp_manager.connect(srv_cfg)
+                if config.evaluation.agent_type != "claude_code":
+                    for srv_cfg in config.mcp_servers:
+                        await mcp_manager.connect(srv_cfg)
 
-                agent = Agent(config, llm_client, mcp_manager)
+                agent = _create_agent(config, llm_client, mcp_manager)
 
                 # Run evaluations
                 provider_results = []
@@ -875,14 +894,17 @@ async def _run_compare(
                 )
 
                 # Initialize components
-                llm_client = LLMClient(server_config.llm)
+                llm_client = None
+                if server_config.evaluation.agent_type != "claude_code":
+                    llm_client = LLMClient(server_config.llm)
                 mcp_manager = MCPClientManager()
 
                 # Connect to MCP server
-                for srv_cfg in server_config.mcp_servers:
-                    await mcp_manager.connect(srv_cfg)
+                if server_config.evaluation.agent_type != "claude_code":
+                    for srv_cfg in server_config.mcp_servers:
+                        await mcp_manager.connect(srv_cfg)
 
-                agent = Agent(server_config, llm_client, mcp_manager)
+                agent = _create_agent(server_config, llm_client, mcp_manager)
 
                 # Run evaluations
                 server_results = []

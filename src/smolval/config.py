@@ -104,9 +104,20 @@ class EvaluationConfig(BaseModel):
     output_format: str = Field(
         default="json", description="Output format (json, csv, markdown)"
     )
+    agent_type: str = Field(
+        default="react", description="Agent type (react, claude_code)"
+    )
     judge: JudgeConfig = Field(
         default_factory=JudgeConfig, description="LLM-as-judge settings"
     )
+
+    @field_validator("agent_type")
+    @classmethod
+    def valid_agent_type(cls, v: str) -> str:
+        """Validate agent type is supported."""
+        if v not in ("react", "claude_code"):
+            raise ValueError("Agent type must be 'react' or 'claude_code'")
+        return v
 
     @field_validator("timeout_seconds")
     @classmethod

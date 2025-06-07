@@ -1,0 +1,27 @@
+# Example configuration for Claude Code agent
+# Uses Claude Code CLI instead of the ReAct agent
+
+mcp_servers:
+  - name: "filesystem"
+    command: ["npx", "@modelcontextprotocol/server-filesystem", "."]
+    env: {}
+    
+  - name: "fetch"
+    command: ["uvx", "mcp-server-fetch"]
+    env: {}
+
+llm:
+  provider: "anthropic"
+  model: "claude-3-5-sonnet-20241022"
+  api_key: "${ANTHROPIC_API_KEY}"
+  temperature: 0.1
+  max_tokens: 4096
+
+evaluation:
+  timeout_seconds: 120
+  max_iterations: 15  # Not used by Claude Code agent
+  output_format: "markdown"
+  agent_type: "claude_code"  # Use Claude Code instead of ReAct agent
+
+judge:
+  enabled: false

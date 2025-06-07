@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+import os
 import time
 from collections.abc import Callable
 from typing import Any
@@ -764,3 +765,561 @@ class Agent:
         self.conversation_history.append(
             LLMMessage(role="tool", content=result, tool_call_id=tool_call_id)
         )
+
+
+class ClaudeCodeAgent:
+    """Claude Code agent for evaluating MCP servers via CLI subprocess."""
+
+    def __init__(self, config: Config, mcp_manager: MCPClientManager) -> None:
+        """Initialize the Claude Code agent."""
+        self.config = config
+        self.mcp_manager = mcp_manager
+
+    async def run(
+        self, prompt: str, progress_callback: Callable[[int, int], None] | None = None
+    ) -> AgentResult:
+        """Run the agent on a given prompt using Claude Code CLI."""
+        start_time = time.time()
+        
+        try:
+            # Apply timeout if configured
+            if self.config.evaluation.timeout_seconds > 0:
+                return await asyncio.wait_for(
+                    self._run_claude_code(prompt, progress_callback),
+                    timeout=self.config.evaluation.timeout_seconds,
+                )
+            else:
+                return await self._run_claude_code(prompt, progress_callback)
+        except TimeoutError:
+            logger.error(
+                "Claude Code execution timed out after %d seconds",
+                self.config.evaluation.timeout_seconds,
+            )
+            return AgentResult(
+                success=False,
+                final_answer="",
+                steps=[],
+                total_iterations=0,
+                error=f"Claude Code execution timed out after {self.config.evaluation.timeout_seconds} seconds",
+                execution_time_seconds=self.config.evaluation.timeout_seconds,
+            )
+
+    async def _run_claude_code(
+        self, prompt: str, progress_callback: Callable[[int, int], None] | None = None
+    ) -> AgentResult:
+        """Internal method that runs Claude Code via subprocess."""
+        import json
+        import tempfile
+        import subprocess
+        import shutil
+        from pathlib import Path
+
+        start_time = time.time()
+        steps: list[AgentStep] = []
+        
+        try:
+            # Set up MCP servers for Claude Code
+            await self._setup_mcp_servers()
+            
+            # Progress callback
+            if progress_callback:
+                progress_callback(1, 2)
+
+            # Find Claude executable
+            claude_exe = self._find_claude_executable()
+            if not claude_exe:
+                raise RuntimeError("Claude Code CLI not found. Please install Claude Code CLI.")
+
+            # Get tool permissions
+            allowed_tools, disallowed_tools = self._get_tool_permissions()
+
+            # Build Claude Code command
+            cmd = [
+                claude_exe,
+                "-p", prompt,
+                "--output-format", "stream-json",
+                "--verbose"
+            ]
+            
+            # Add allowed tools
+            for tool in allowed_tools:
+                cmd.extend(["--allowedTools", tool])
+            
+            # Add disallowed tools
+            for tool in disallowed_tools:
+                cmd.extend(["--disallowedTools", tool])
+
+            # Add API key if available
+            env = dict(os.environ)
+            if self.config.llm.api_key:
+                env["ANTHROPIC_API_KEY"] = self.config.llm.api_key
+
+            logger.debug("Running Claude Code command: %s", " ".join(cmd))
+            
+            # Execute Claude Code subprocess
+            process = await asyncio.create_subprocess_exec(
+                *cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+                env=env
+            )
+
+            # Read and parse streaming JSON output
+            stdout_data = b""
+            stderr_data = b""
+            
+            if process.stdout:
+                stdout_data, stderr_data = await process.communicate()
+            
+            return_code = process.returncode
+            
+            # Progress callback
+            if progress_callback:
+                progress_callback(2, 2)
+
+            execution_time = time.time() - start_time
+            
+            if return_code != 0:
+                error_msg = stderr_data.decode('utf-8') if stderr_data else "Claude Code failed"
+                logger.error("Claude Code failed with return code %d: %s", return_code, error_msg)
+                return AgentResult(
+                    success=False,
+                    final_answer="",
+                    steps=[],
+                    total_iterations=0,
+                    error=error_msg,
+                    execution_time_seconds=execution_time,
+                )
+
+            # Parse the streaming JSON output
+            output_text = stdout_data.decode('utf-8') if stdout_data else ""
+            final_answer, parsed_steps = self._parse_claude_code_output(output_text)
+            
+            return AgentResult(
+                success=True,
+                final_answer=final_answer,
+                steps=parsed_steps,
+                total_iterations=len(parsed_steps),
+                execution_time_seconds=execution_time,
+            )
+
+        except Exception as e:
+            execution_time = time.time() - start_time
+            logger.error("Claude Code agent error: %s", e)
+            return AgentResult(
+                success=False,
+                final_answer="",
+                steps=[],
+                total_iterations=0,
+                error=str(e),
+                execution_time_seconds=execution_time,
+            )
+        finally:
+            # Clean up temporary files
+            await self._cleanup_mcp_servers()
+
+    async def _setup_mcp_servers(self) -> None:
+        """Set up MCP servers for Claude Code using claude mcp commands."""
+        import subprocess
+        
+        try:
+            # Find Claude executable
+            claude_exe = self._find_claude_executable()
+            if not claude_exe:
+                logger.warning("Claude Code CLI not found, skipping MCP server setup")
+                return
+            
+            # Get existing MCP servers to avoid conflicts
+            existing_servers = await self._get_existing_mcp_servers()
+            
+            for server_config in self.config.mcp_servers:
+                server_name = f"smolval_{server_config.name}"
+                
+                # Skip if server already exists
+                if server_name in existing_servers:
+                    logger.debug("MCP server %s already exists, skipping", server_name)
+                    continue
+                
+                # Build claude mcp add command
+                cmd = [claude_exe, "mcp", "add", server_name]
+                
+                # Add environment variables
+                for key, value in server_config.env.items():
+                    cmd.extend(["-e", f"{key}={value}"])
+                
+                # Add server command
+                cmd.append("--")
+                cmd.extend(server_config.command)
+                
+                logger.debug("Adding MCP server: %s", " ".join(cmd))
+                
+                # Execute command
+                process = await asyncio.create_subprocess_exec(
+                    *cmd,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE
+                )
+                
+                _, stderr = await process.communicate()
+                
+                if process.returncode != 0:
+                    error_msg = stderr.decode('utf-8') if stderr else "Failed to add MCP server"
+                    logger.warning("Failed to add MCP server %s: %s", server_name, error_msg)
+                
+        except Exception as e:
+            logger.warning("Error setting up MCP servers: %s", e)
+
+    async def _get_existing_mcp_servers(self) -> set[str]:
+        """Get list of existing MCP servers."""
+        try:
+            claude_exe = self._find_claude_executable()
+            if not claude_exe:
+                return set()
+                
+            process = await asyncio.create_subprocess_exec(
+                claude_exe, "mcp", "list",
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE
+            )
+            
+            stdout, _ = await process.communicate()
+            
+            if process.returncode == 0:
+                # Parse the output to extract server names
+                output = stdout.decode('utf-8')
+                # This is a simple parsing - may need adjustment based on actual output format
+                servers = set()
+                for line in output.splitlines():
+                    if line.strip() and not line.startswith('#'):
+                        # Extract server name (assuming first word is the name)
+                        parts = line.strip().split()
+                        if parts:
+                            servers.add(parts[0])
+                return servers
+            
+        except Exception as e:
+            logger.debug("Error getting existing MCP servers: %s", e)
+        
+        return set()
+
+    async def _cleanup_mcp_servers(self) -> None:
+        """Clean up MCP servers added for this evaluation."""
+        try:
+            claude_exe = self._find_claude_executable()
+            if not claude_exe:
+                logger.debug("Claude Code CLI not found, skipping MCP server cleanup")
+                return
+                
+            for server_config in self.config.mcp_servers:
+                server_name = f"smolval_{server_config.name}"
+                
+                cmd = [claude_exe, "mcp", "remove", server_name]
+                
+                process = await asyncio.create_subprocess_exec(
+                    *cmd,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE
+                )
+                
+                await process.communicate()
+                
+                if process.returncode != 0:
+                    logger.debug("Failed to remove MCP server %s (may not have existed)", server_name)
+                
+        except Exception as e:
+            logger.debug("Error cleaning up MCP servers: %s", e)
+
+    def _parse_claude_code_output(self, output: str) -> tuple[str, list[AgentStep]]:
+        """Parse Claude Code streaming JSON output into AgentResult format."""
+        import json
+        
+        steps: list[AgentStep] = []
+        final_answer = ""
+        tool_uses = {}  # Track tool uses by ID
+        
+        # Split output into lines and parse each JSON object
+        lines = output.strip().split('\n')
+        
+        for i, line in enumerate(lines):
+            if not line.strip():
+                continue
+                
+            try:
+                data = json.loads(line)
+                
+                # Extract different types of messages from Claude Code
+                if isinstance(data, dict):
+                    message_type = data.get('type', '')
+                    
+                    if message_type == 'result':
+                        # This is the final result - use this as the clean final answer
+                        final_answer = data.get('result', '')
+                        break  # We found the final answer, stop processing
+                    
+                    elif message_type == 'assistant':
+                        # Assistant message with tool uses or text
+                        message = data.get('message', {})
+                        content = message.get('content', [])
+                        
+                        for content_item in content:
+                            if isinstance(content_item, dict):
+                                if content_item.get('type') == 'tool_use':
+                                    # Track tool use
+                                    tool_id = content_item.get('id')
+                                    tool_name = content_item.get('name')
+                                    tool_input = content_item.get('input', {})
+                                    
+                                    tool_uses[tool_id] = {
+                                        'name': tool_name,
+                                        'input': tool_input,
+                                        'step_index': len(steps)
+                                    }
+                                    
+                                    step = AgentStep(
+                                        iteration=len(steps) + 1,
+                                        thought=f"Using tool: {tool_name}",
+                                        action=tool_name,
+                                        action_input=tool_input
+                                    )
+                                    steps.append(step)
+                                
+                                elif content_item.get('type') == 'text':
+                                    # Text content
+                                    text_content = content_item.get('text', '')
+                                    if text_content:
+                                        step = AgentStep(
+                                            iteration=len(steps) + 1,
+                                            thought=text_content,
+                                            observation=None
+                                        )
+                                        steps.append(step)
+                    
+                    elif message_type == 'user':
+                        # User message with tool results
+                        message = data.get('message', {})
+                        content = message.get('content', [])
+                        
+                        for content_item in content:
+                            if isinstance(content_item, dict) and content_item.get('type') == 'tool_result':
+                                tool_id = content_item.get('tool_use_id')
+                                result_content = content_item.get('content', '')
+                                
+                                # Find the corresponding tool use and add the result
+                                if tool_id in tool_uses:
+                                    step_index = tool_uses[tool_id]['step_index']
+                                    if step_index < len(steps):
+                                        steps[step_index].observation = result_content
+                                        
+            except json.JSONDecodeError:
+                # If not valid JSON, treat as plain text
+                if line.strip():
+                    step = AgentStep(
+                        iteration=len(steps) + 1,
+                        thought=line.strip(),
+                        observation=None
+                    )
+                    steps.append(step)
+        
+        # If no final answer was found, create one from the steps
+        if not final_answer:
+            if steps:
+                # Use the last step's thought as the final answer
+                final_answer = steps[-1].thought
+            else:
+                # Fallback to raw output
+                final_answer = output.strip()
+        
+        # If no steps were created, create a single step
+        if not steps:
+            steps.append(AgentStep(
+                iteration=1,
+                thought=final_answer,
+                observation=None
+            ))
+        
+        return final_answer.strip(), steps
+
+    def _find_claude_executable(self) -> str | None:
+        """Find the Claude Code CLI executable."""
+        import shutil
+        from pathlib import Path
+        
+        # First try to find claude in PATH
+        claude_path = shutil.which("claude")
+        if claude_path:
+            return claude_path
+        
+        # Common installation paths
+        possible_paths = [
+            Path.home() / ".claude" / "local" / "claude",
+            Path("/usr/local/bin/claude"),
+            Path("/opt/homebrew/bin/claude"),
+        ]
+        
+        for path in possible_paths:
+            if path.exists() and path.is_file():
+                return str(path)
+        
+        return None
+
+    def _get_tool_permissions(self) -> tuple[list[str], list[str]]:
+        """Get tool permissions for Claude Code CLI flags."""
+        
+        # Define allowed tools for MCP evaluation tasks (including development)
+        allowed_tools = [
+            # File system operations (full access for development)
+            "LS(**)",
+            "Read(**)",
+            "Edit(**)",
+            "Write(**)",
+            "Glob(**)",
+            "Grep(**)",
+            "MultiEdit(**)",
+            
+            # Task management and automation
+            "Task(**)",
+            "TodoRead(**)",
+            "TodoWrite(**)",
+            
+            # Web operations (for fetch MCP server)
+            "WebFetch(**)",
+            "WebSearch(**)",
+            
+            # Bash operations (development and file management)
+            "Bash(ls *)",
+            "Bash(cat *)",
+            "Bash(grep *)",
+            "Bash(find *)",
+            "Bash(pwd)",
+            "Bash(cd *)",
+            "Bash(head *)",
+            "Bash(tail *)",
+            "Bash(wc *)",
+            "Bash(sort *)",
+            "Bash(uniq *)",
+            "Bash(cut *)",
+            "Bash(awk *)",
+            "Bash(sed *)",
+            "Bash(echo *)",
+            "Bash(which *)",
+            "Bash(type *)",
+            
+            # Directory and file creation (needed for projects)
+            "Bash(mkdir *)",
+            "Bash(touch *)",
+            "Bash(cp *.* *)",  # Copy files (not directories)
+            "Bash(mv *.* *)",  # Move files (not directories)
+            
+            # Development tools and package managers (essential for SPA development)
+            "Bash(npm init *)",
+            "Bash(npm install *)",
+            "Bash(npm run *)",
+            "Bash(npm start)",
+            "Bash(npm test)",
+            "Bash(npm build)",
+            "Bash(npx *)",
+            "Bash(yarn *)",
+            "Bash(node *)",
+            "Bash(python *)",
+            "Bash(pip install *)",
+            
+            # Git operations (project management)
+            "Bash(git init)",
+            "Bash(git status)",
+            "Bash(git add *)",
+            "Bash(git commit *)",
+            "Bash(git log *)",
+            "Bash(git diff *)",
+            "Bash(git show *)",
+            
+            # Development servers and tools
+            "Bash(python -m http.server *)",
+            "Bash(python3 -m http.server *)",
+            "Bash(live-server *)",
+            "Bash(serve *)",
+            
+            # MCP GitHub tools (if available)
+            "mcp__github__get_file_contents(**)",
+            "mcp__github__get_issue(**)",
+            "mcp__github__get_pull_request(**)",
+            "mcp__github__list_issues(**)",
+            "mcp__github__list_pull_requests(**)",
+            "mcp__github__search_code(**)",
+            "mcp__github__search_issues(**)",
+            "mcp__github__search_repositories(**)",
+        ]
+        
+        # Define disallowed tools (truly dangerous operations)
+        disallowed_tools = [
+            # File deletion and dangerous operations
+            "Bash(rm *)",
+            "Bash(rmdir *)",
+            "Bash(rm -rf *)",
+            "Bash(rm -f *)",
+            
+            # Permission and ownership changes
+            "Bash(chmod *)",
+            "Bash(chown *)",
+            "Bash(chgrp *)",
+            
+            # Privilege escalation
+            "Bash(sudo *)",
+            "Bash(su *)",
+            
+            # Network operations (could be used maliciously)
+            "Bash(curl *)",
+            "Bash(wget *)",
+            "Bash(ssh *)",
+            "Bash(scp *)",
+            "Bash(rsync *)",
+            "Bash(nc *)",
+            "Bash(netcat *)",
+            
+            # Process management
+            "Bash(killall *)",
+            "Bash(pkill *)",
+            "Bash(kill *)",
+            
+            # System service management
+            "Bash(systemctl *)",
+            "Bash(service *)",
+            "Bash(launchctl *)",
+            
+            # System package managers (global installs)
+            "Bash(brew install *)",
+            "Bash(brew uninstall *)",
+            "Bash(apt *)",
+            "Bash(yum *)",
+            "Bash(dnf *)",
+            "Bash(pacman *)",
+            "Bash(zypper *)",
+            
+            # Global npm operations
+            "Bash(npm install -g *)",
+            "Bash(npm uninstall -g *)",
+            "Bash(npm link *)",
+            "Bash(npm unlink *)",
+            
+            # Directory operations on system paths
+            "Bash(mv /* *)",
+            "Bash(cp -r /* *)",
+            "Bash(mkdir /usr *)",
+            "Bash(mkdir /etc *)",
+            "Bash(mkdir /var *)",
+            "Bash(mkdir /sys *)",
+            "Bash(mkdir /proc *)",
+            
+            # MCP GitHub write operations (read-only for evaluation)
+            "mcp__github__create_issue(**)",
+            "mcp__github__update_issue(**)",
+            "mcp__github__create_pull_request(**)",
+            "mcp__github__update_pull_request(**)",
+            "mcp__github__merge_pull_request(**)",
+            "mcp__github__create_or_update_file(**)",
+            "mcp__github__delete_file(**)",
+            "mcp__github__push_files(**)",
+        ]
+        
+        logger.debug("Configured %d allowed tools and %d disallowed tools", 
+                    len(allowed_tools), len(disallowed_tools))
+        return allowed_tools, disallowed_tools
