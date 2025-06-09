@@ -8,19 +8,12 @@ authors = [
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
-    "mcp>=1.0.0",
-    "llm>=0.17.0",
-    "llm-anthropic",
     "pydantic>=2.5.0",
     "click>=8.1.0",
-    "pyyaml>=6.0.0",
-    "rich>=13.0.0",
-    "pandas>=2.0.0",
     "jinja2>=3.1.0",
-    "python-dotenv>=1.0.0",
-    "llm-gemini>=0.20",
-    "tiktoken>=0.9.0",
     "markdown-it-py>=3.0.0",
+    "python-dotenv>=1.0.0",
+    "rich>=13.0.0",
 ]
 
 [project.optional-dependencies]
@@ -36,7 +29,7 @@ dev = [
 ]
 
 [project.scripts]
-smolval = "smolval.cli:main"
+smolval = "smolval.cli:cli"
 
 [build-system]
 requires = ["hatchling"]
@@ -53,8 +46,6 @@ dev-dependencies = [
     "mypy>=1.5.0",
     "ruff>=0.0.290",
     "requests>=2.31.0",
-    "llm-ollama>=0.3.0",
-    "types-pyyaml>=6.0.12.20250516",
 ]
 
 [tool.pytest.ini_options]

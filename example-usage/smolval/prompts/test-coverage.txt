@@ -1,0 +1,23 @@
+Analyze the testing approach and coverage in this codebase:
+
+1. **Test Discovery**: Find all test files and testing frameworks used
+2. **Test Types**: Identify different types of tests:
+   - Unit tests
+   - Integration tests
+   - End-to-end tests
+   - Performance tests
+3. **Coverage Analysis**: Examine which parts of the code are tested
+4. **Test Quality**: Review test structure and patterns:
+   - Test organization
+   - Test naming conventions
+   - Setup/teardown patterns
+   - Mocking strategies
+5. **Missing Tests**: Identify critical paths that lack test coverage
+6. **Test Configuration**: Review testing configuration and CI setup
+
+Provide:
+- Overview of current testing strategy
+- Assessment of test coverage gaps
+- Recommendations for improving test quality
+- Suggestions for additional test types needed
+- Examples of critical functions that should be tested

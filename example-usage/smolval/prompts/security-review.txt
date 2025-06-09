@@ -1,0 +1,19 @@
+Perform a security review of this codebase:
+
+1. **Dependency Security**: Check for known vulnerabilities in dependencies
+2. **Code Patterns**: Look for common security anti-patterns:
+   - Hardcoded secrets or API keys
+   - SQL injection vulnerabilities
+   - XSS vulnerabilities
+   - Insecure file operations
+   - Weak authentication/authorization
+3. **Configuration Security**: Review configuration files for security issues
+4. **Environment Variables**: Check how sensitive data is handled
+5. **Input Validation**: Examine user input handling and validation
+6. **Docker Security**: If Dockerfiles exist, review for security best practices
+
+Provide:
+- A list of potential security issues found
+- Severity assessment (Critical/High/Medium/Low)
+- Specific recommendations for remediation
+- Best practices that should be implemented

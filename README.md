@@ -1,51 +1,50 @@
 # smolval
 
-A lightweight Python application for evaluating MCP (Model Context Protocol) servers using LLM agents. smolval implements a ReAct (Reason + Act) pattern to systematically test MCP server implementations through structured evaluation prompts.
+A lightweight, containerized Python application for evaluating MCP (Model Context Protocol) servers using Claude Code CLI. smolval provides a self-contained Docker environment with Claude Code CLI, development tools, and MCP server support built-in for systematic MCP server evaluation.
 
 ## ✨ Features
 
-- Evaluate MCP servers with LLM-guided reasoning and tooling.
-- Support for multiple LLM providers: Anthropic Claude, OpenAI, Google Gemini, and Ollama.
-- Batch evaluations and server comparisons.
-- Cross-provider model comparisons.
-- Outputs results in JSON, CSV, Markdown, and HTML.
+- **Self-Contained Container**: Claude Code CLI and all tools pre-installed, zero host dependencies
+- **MCP Server Evaluation**: Systematic testing using Claude Code's agent capabilities
+- **Docker-in-Docker Support**: Full MCP server isolation with container support
+- **Multiple Output Formats**: JSON, CSV, Markdown, and HTML results
+- **Progress Indicators**: Visual feedback during evaluation with elapsed time tracking
+- **Standard Configuration**: Uses `.mcp.json` format compatible with Claude Desktop/Cursor
 
 ## 🚀 Quick Start
 
 ### Prerequisites
 
-- Python 3.11 or higher
-- Node.js 18+ (for NPM-based MCP servers)
-- Docker (optional, for containerized MCP servers)
+- Docker
+- ANTHROPIC_API_KEY
 
-### Installation
+### One-Command Setup
 
 ```bash
+# Clone repository
 git clone https://github.com/austinlparker/smolval.git
 cd smolval
-uv sync --all-extras
+
+# Build container (includes Claude Code CLI and all tools)
+docker build -t ghcr.io/austinlparker/smolval .
+
+# Run your first evaluation - no local installation required!
+docker run --rm \
+  -v $(pwd):/workspace \
+  -e ANTHROPIC_API_KEY \
+  ghcr.io/austinlparker/smolval eval /workspace/prompts/simple_test.txt
 ```
 
-### Basic Usage
+### For MCP Servers Requiring Docker
 
-1. **Set up your API key:**
 ```bash
-export ANTHROPIC_API_KEY="your-api-key-here"
-# or for OpenAI: export OPENAI_API_KEY="your-api-key-here"
+# Enable Docker-in-Docker for containerized MCP servers
+docker run --rm \
+  -v $(pwd):/workspace \
+  -v /var/run/docker.sock:/var/run/docker.sock \
+  -e ANTHROPIC_API_KEY \
+  ghcr.io/austinlparker/smolval eval /workspace/prompts/database-test.txt
 ```
-
-2. **Install MCP servers:**
-```bash
-npm install -g @modelcontextprotocol/server-filesystem
-uv tool install mcp-server-fetch
-```
-
-3. **Run your first evaluation:**
-```bash
-uv run python -m smolval.cli eval prompts/example.txt
-```
-
-4. **View results in the generated output directory**
 
 ## 📖 Documentation
 
@@ -60,118 +59,145 @@ Comprehensive documentation is available in the [`docs/`](docs/) directory:
 
 ## 🛠️ Commands
 
-## Prompts
-
 ### Single Evaluation
 ```bash
-uv run python -m smolval.cli eval prompts/file-test.txt
+# Basic evaluation using Claude Code's built-in tools
+docker run --rm \
+  -v $(pwd):/workspace \
+  -e ANTHROPIC_API_KEY \
+  ghcr.io/austinlparker/smolval eval /workspace/prompts/file-test.txt
+
+# With specific output format
+docker run --rm \
+  -v $(pwd):/workspace \
+  -e ANTHROPIC_API_KEY \
+  ghcr.io/austinlparker/smolval eval /workspace/prompts/file-test.txt --format html
 ```
 
-### Batch Evaluation
+### Custom MCP Configuration
 ```bash
-uv run python -m smolval.cli batch prompts/ --output-dir results/
+# Use custom .mcp.json configuration
+docker run --rm \
+  -v $(pwd):/workspace \
+  -v /var/run/docker.sock:/var/run/docker.sock \
+  -e ANTHROPIC_API_KEY \
+  ghcr.io/austinlparker/smolval eval /workspace/prompts/test.txt --mcp-config /workspace/.mcp.json
 ```
 
-### Server Comparison
-```bash
-uv run python -m smolval.cli compare \
-  --baseline filesystem \
-  --test fetch \
-  prompts/ \
-  --format html
-```
-
-Run `uv run python -m smolval.cli --help` for all options.
+Run `docker run --rm ghcr.io/austinlparker/smolval --help` for all options.
 
 ## ⚙️ Configuration
 
-smolval uses YAML configuration files with support for environment variable expansion:
+smolval uses the standard `.mcp.json` configuration format compatible with Claude Desktop and Cursor:
 
-```yaml
-mcp_servers:
-  - name: "filesystem"
-    command: ["npx", "@modelcontextprotocol/server-filesystem", "."]
-    env: {}
-
-llm:
-  provider: "anthropic"
-  model: "claude-3-5-sonnet-20241022"
-  api_key: "${ANTHROPIC_API_KEY}"
-  temperature: 0.1
-
-evaluation:
-  timeout_seconds: 120
-  max_iterations: 15
-  output_format: "markdown"
+```json
+{
+  "mcpServers": {
+    "sqlite": {
+      "command": "docker",
+      "args": ["run", "--rm", "-i", "mcp/sqlite"],
+      "env": {}
+    },
+    "filesystem": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-filesystem", "/workspace"],
+      "env": {}
+    }
+  }
+}
 ```
 
-Example configurations are available in [`docs/examples/`](docs/examples/).
+**Note**: Claude Code has filesystem and web fetch capabilities built-in, so MCP servers are only needed for additional functionality like databases, APIs, etc.
 
-## 🐳 Docker Usage
+Example configurations are available in the [`docs/examples/`](docs/examples/) directory.
 
+## 🐳 Container Features
+
+### Pre-installed Tools
+- **Claude Code CLI**: Latest version ready to use
+- **Node.js & npm/npx**: For NPM-based MCP servers  
+- **Docker CLI**: For containerized MCP servers
+- **Development Tools**: git, vim, tree, jq, uvx
+- **MCP Servers**: Common servers pre-installed for faster startup
+
+### Volume Mounting Strategy
 ```bash
-# Build the image
-docker build -t smolval .
+# Basic workspace mount
+-v $(pwd):/workspace
 
-# Run evaluation
-docker run --rm \
-  -v $(pwd)/prompts:/prompts \
-  -v $(pwd)/results:/results \
-  -e ANTHROPIC_API_KEY \
-  smolval eval /prompts/example.txt --output-dir /results
+# Docker-in-Docker support
+-v /var/run/docker.sock:/var/run/docker.sock
+
+# Custom output directory
+-v $(pwd)/results:/results
 ```
 
-For MCP servers requiring Docker (like SQLite), mount the Docker socket:
+### Environment Variables
 ```bash
-docker run --rm \
-  -v /var/run/docker.sock:/var/run/docker.sock \
-  --user root \
-  -e ANTHROPIC_API_KEY \
-  smolval eval prompts/database-test.txt
+# Required
+-e ANTHROPIC_API_KEY
+
+# Optional
+-e CLAUDE_CONFIG_DIR=/app/.claude
 ```
 
 ## 🧪 Testing
 
-Run the test suite:
+Run the test suite in container:
 ```bash
+# Build development image
+docker build -t ghcr.io/austinlparker/smolval:dev .
+
 # Unit tests only
-uv run pytest -m "not integration and not slow"
+docker run --rm \
+  -v $(pwd):/workspace \
+  -w /workspace \
+  ghcr.io/austinlparker/smolval:dev uv run pytest -m "not integration and not slow"
 
 # All tests
-uv run pytest
+docker run --rm \
+  -v $(pwd):/workspace \
+  -w /workspace \
+  ghcr.io/austinlparker/smolval:dev uv run pytest
 
 # With coverage
-uv run pytest --cov=smolval --cov-report=html
+docker run --rm \
+  -v $(pwd):/workspace \
+  -w /workspace \
+  ghcr.io/austinlparker/smolval:dev uv run pytest --cov=smolval --cov-report=html
 ```
 
 See [`tests/README.md`](tests/README.md) for detailed testing information.
 
 ## 📊 MCP Server Support
 
-smolval supports various MCP server types:
+smolval supports various MCP server types through the container:
 
-- **NPM-based**: `@modelcontextprotocol/server-filesystem`
-- **Python-based**: `mcp-server-fetch` (web content retrieval)
-- **Docker-based**: `mcp/sqlite` (database operations)
+- **Built-in Claude Code Tools**: Filesystem operations, web content fetching
+- **Pre-installed NPM**: `@modelcontextprotocol/server-filesystem`, `@modelcontextprotocol/server-memory`
+- **Docker-based**: `mcp/sqlite`, custom containers via Docker-in-Docker
+- **Python-based**: Any uvx-installable MCP servers
 
 ## 🔧 Development
 
-### Code Quality
+### Container-First Development
 
 ```bash
-# Format code
-uv run black src/ tests/
-uv run isort src/ tests/
+# Interactive development container
+docker run -it --rm \
+  -v $(pwd):/workspace \
+  -v /var/run/docker.sock:/var/run/docker.sock \
+  -e ANTHROPIC_API_KEY \
+  -w /workspace \
+  ghcr.io/austinlparker/smolval:dev bash
 
-# Lint
-uv run ruff check src/ tests/
-
-# Type check
-uv run mypy src/
-
-# Run all quality checks
-uv run black src/ tests/ && uv run isort src/ tests/ && uv run ruff check src/ tests/ && uv run mypy src/
+# Code quality checks in container
+docker run --rm \
+  -v $(pwd):/workspace \
+  -w /workspace \
+  ghcr.io/austinlparker/smolval:dev bash -c "uv run black src/ tests/ && uv run isort src/ tests/ && uv run ruff check src/ tests/ && uv run mypy src/"
 ```
+
 
 ### Project Structure
 
@@ -180,16 +206,14 @@ smolval/
 ├── src/smolval/          # Main application code
 ├── docs/                 # Documentation
 ├── tests/                # Test suite
-├── config/               # Example configurations
 ├── prompts/              # Example evaluation prompts
 └── results/              # Generated evaluation results
 ```
 
 ## 📋 Requirements
 
-- **Python**: 3.11+
-- **Core Dependencies**: `mcp`, `llm`, `pydantic`, `click`, `pyyaml`, `rich`, `jinja2`
-- **Development**: `pytest`, `black`, `isort`, `mypy`, `ruff`
+- **Docker**: Only host system requirement
+- **ANTHROPIC_API_KEY**: Environment variable for Claude Code CLI
 
 ## 📄 License
 

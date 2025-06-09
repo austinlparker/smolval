@@ -1,0 +1,38 @@
+services:
+  # Main evaluation service - run evaluations easily
+  eval:
+    build: .
+    volumes:
+      - .:/workspace
+      - /var/run/docker.sock:/var/run/docker.sock
+    env_file:
+      - .env
+    working_dir: /workspace
+    profiles: ["eval"]  # Only start when explicitly requested
+    
+  # Development container - keep running for interactive use
+  dev:
+    build: .
+    volumes:
+      - .:/workspace
+      - /var/run/docker.sock:/var/run/docker.sock
+    env_file:
+      - .env
+    working_dir: /workspace
+    stdin_open: true
+    tty: true
+    entrypoint: ["tail", "-f", "/dev/null"]  # Keep running for exec
+    
+  # Interactive shell
+  shell:
+    build: .
+    volumes:
+      - .:/workspace
+      - /var/run/docker.sock:/var/run/docker.sock
+    env_file:
+      - .env
+    working_dir: /workspace
+    stdin_open: true
+    tty: true
+    entrypoint: ["bash"]
+    profiles: ["shell"]  # Only start when explicitly requested

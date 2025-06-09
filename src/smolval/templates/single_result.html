@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>🤖 LLM Agent Execution: {{ metadata.prompt_file or 'Unknown' }}</title>
+    <title>🤖 Claude Code Execution: {{ metadata.prompt_file or 'Unknown' }}</title>
     <style>
         * {
             margin: 0;
@@ -154,12 +154,17 @@
             flex-shrink: 0;
         }
 
-        .timeline-item.has-action .step-number {
+        .timeline-item.tool-use .step-number {
             background: var(--info);
             color: white;
         }
 
-        .timeline-item.has-error .step-number {
+        .timeline-item.tool-result .step-number {
+            background: var(--success);
+            color: white;
+        }
+
+        .timeline-item.tool-error .step-number {
             background: var(--error);
             color: white;
         }
@@ -243,27 +248,16 @@
             opacity: 0.7;
         }
 
-        .thought-bubble {
+        .content-bubble {
             background: linear-gradient(135deg, var(--info-light) 0%, #f0f4ff 100%);
             border: 1px solid var(--info);
             border-radius: 12px;
             padding: 1.5rem;
             position: relative;
-            font-style: italic;
             color: var(--neutral-700);
         }
 
-        .thought-bubble::before {
-            content: '🤔';
-            position: absolute;
-            top: -10px;
-            left: 20px;
-            background: white;
-            padding: 0 0.5rem;
-            font-style: normal;
-        }
-
-        .action-panel {
+        .tool-panel {
             background: var(--success-light);
             border: 1px solid var(--success);
             border-radius: 12px;
@@ -271,13 +265,13 @@
             margin-bottom: 1rem;
         }
 
-        .action-header {
+        .tool-header {
             display: flex;
             align-items: center;
             margin-bottom: 1rem;
         }
 
-        .action-name {
+        .tool-name {
             background: var(--success);
             color: white;
             padding: 0.5rem 1rem;
@@ -287,7 +281,7 @@
             margin-right: 1rem;
         }
 
-        .observation-panel {
+        .output-panel {
             background: var(--neutral-50);
             border: 1px solid var(--neutral-200);
             border-radius: 12px;
@@ -318,26 +312,27 @@
             overflow-y: auto;
         }
 
-        .token-usage {
-            display: flex;
+        .metadata-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
             gap: 1rem;
             margin-top: 1rem;
         }
 
-        .token-item {
+        .metadata-item {
             background: var(--neutral-100);
-            padding: 0.5rem 1rem;
+            padding: 0.75rem 1rem;
             border-radius: 6px;
             text-align: center;
         }
 
-        .token-value {
+        .metadata-value {
             font-weight: 700;
-            font-size: 1.125rem;
+            font-size: 1rem;
             color: var(--primary);
         }
 
-        .token-label {
+        .metadata-label {
             font-size: 0.75rem;
             color: var(--neutral-600);
             text-transform: uppercase;
@@ -356,12 +351,18 @@
             font-size: 1.25rem;
         }
 
-        .prompt-panel {
-            background: var(--warning-light);
-            border: 1px solid var(--warning);
+        .error-panel {
+            background: var(--error-light);
+            border: 2px solid var(--error);
             border-radius: 12px;
-            padding: 1.5rem;
+            padding: 2rem;
             margin-bottom: 2rem;
+        }
+
+        .error-panel h3 {
+            color: var(--error);
+            margin-bottom: 1rem;
+            font-size: 1.25rem;
         }
 
         .expandable {
@@ -386,140 +387,6 @@
             max-height: 1000px;
         }
 
-        /* LLM Judge Evaluation Styles */
-        .judge-panel {
-            background: white;
-            border-radius: 12px;
-            box-shadow: var(--shadow-lg);
-            margin: 2rem 0;
-            overflow: hidden;
-        }
-
-        .judge-header {
-            background: linear-gradient(135deg, var(--info) 0%, var(--primary) 100%);
-            padding: 1.5rem 2rem;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-        .judge-score-badge {
-            padding: 0.5rem 1rem;
-            border-radius: 20px;
-            font-weight: 700;
-            font-size: 1.125rem;
-            color: white;
-        }
-
-        .judge-score-badge.success {
-            background: var(--success);
-        }
-
-        .judge-score-badge.warning {
-            background: var(--warning);
-        }
-
-        .judge-score-badge.error {
-            background: var(--error);
-        }
-
-        .judge-summary {
-            padding: 1.5rem 2rem;
-            background: var(--neutral-50);
-            border-bottom: 1px solid var(--neutral-200);
-            font-style: italic;
-            color: var(--neutral-700);
-            line-height: 1.6;
-        }
-
-        .judge-scores-grid {
-            padding: 2rem;
-        }
-
-        .judge-criterion {
-            background: var(--neutral-50);
-            border-radius: 8px;
-            padding: 1rem;
-            margin-bottom: 1rem;
-            border: 1px solid var(--neutral-200);
-        }
-
-        .judge-criterion-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 0.75rem;
-        }
-
-        .judge-criterion-name {
-            font-weight: 600;
-            color: var(--neutral-700);
-            font-size: 1rem;
-        }
-
-        .judge-criterion-score {
-            padding: 0.25rem 0.75rem;
-            border-radius: 12px;
-            font-weight: 700;
-            font-size: 0.875rem;
-            color: white;
-        }
-
-        .judge-criterion-score.success {
-            background: var(--success);
-        }
-
-        .judge-criterion-score.warning {
-            background: var(--warning);
-        }
-
-        .judge-criterion-score.error {
-            background: var(--error);
-        }
-
-        .judge-criterion-reasoning {
-            color: var(--neutral-600);
-            font-size: 0.875rem;
-            line-height: 1.5;
-        }
-
-        .judge-section {
-            padding: 0 2rem 1.5rem 2rem;
-        }
-
-        .judge-section-title {
-            color: var(--neutral-700);
-            font-size: 1.125rem;
-            font-weight: 600;
-            margin-bottom: 1rem;
-        }
-
-        .judge-list {
-            display: flex;
-            flex-direction: column;
-            gap: 0.5rem;
-        }
-
-        .judge-list-item {
-            padding: 0.75rem 1rem;
-            border-radius: 6px;
-            font-size: 0.875rem;
-            line-height: 1.5;
-            border-left: 3px solid;
-        }
-
-        .judge-list-item.success {
-            background: var(--success-light);
-            border-left-color: var(--success);
-            color: var(--neutral-700);
-        }
-
-        .judge-list-item.warning {
-            background: var(--warning-light);
-            border-left-color: var(--warning);
-            color: var(--neutral-700);
-        }
-
         @media (max-width: 1024px) {
             .main-content {
                 grid-template-columns: 1fr;
@@ -530,19 +397,13 @@
                 position: static;
                 max-height: 200px;
             }
-
-            .judge-header {
-                flex-direction: column;
-                gap: 1rem;
-                text-align: center;
-            }
         }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="header">
-            <h1>🤖 LLM Agent Execution Analysis</h1>
+            <h1>🤖 Claude Code Execution Analysis</h1>
             <p>{{ metadata.prompt_file or 'Unknown Prompt' }} • {{ result.total_iterations }} iterations • {{ "%.2f"|format(result.execution_time_seconds) }}s</p>
         </div>
 
@@ -569,35 +430,43 @@
                 <div class="label">Failed Tools</div>
             </div>
             {% endif %}
-            {% if total_tokens %}
-            <div class="status-card info">
-                <div class="value">{{ "{:,}".format(total_tokens) }}</div>
-                <div class="label">Total Tokens</div>
+            {% if result.successful_tool_calls %}
+            <div class="status-card success">
+                <div class="value">{{ result.successful_tool_calls }}</div>
+                <div class="label">Successful Tools</div>
             </div>
             {% endif %}
         </div>
 
-        <div class="prompt-panel">
-            <h3>📝 Original Prompt</h3>
-            <div class="code-block">{{ prompt or 'No prompt available' }}</div>
+        {% if result.error_message %}
+        <div class="error-panel">
+            <h3>❌ Execution Error</h3>
+            <div class="code-block">{{ result.error_message }}</div>
         </div>
+        {% endif %}
 
         <div class="main-content">
             <div class="timeline">
                 <h3>🕐 Execution Timeline</h3>
                 {% for step in result.steps %}
-                <div class="timeline-item {{ 'has-action' if step.action else '' }} {{ 'has-error' if step.tool_call_failed else '' }}" 
+                <div class="timeline-item {{ step.step_type.replace('_', '-') }} {{ 'tool-error' if step.tool_error else '' }}" 
                      data-step="{{ loop.index0 }}" onclick="showStep({{ loop.index0 }})">
                     <div class="step-number">{{ loop.index }}</div>
                     <div class="step-info">
                         <div class="step-title">
-                            {% if step.action %}
-                                🔧 {{ step.action }}
+                            {% if step.step_type == "tool_use" %}
+                                🔧 {{ step.tool_name or 'Unknown Tool' }}
+                            {% elif step.step_type == "tool_result" %}
+                                📋 {{ step.tool_name or 'Tool Result' }}
+                            {% elif step.step_type == "text_response" %}
+                                💭 Text Response
+                            {% elif step.step_type == "system_init" %}
+                                🚀 System Init
                             {% else %}
-                                💭 Thinking
+                                🔄 {{ step.step_type|title }}
                             {% endif %}
                         </div>
-                        <div class="step-meta">Iteration {{ step.iteration }}</div>
+                        <div class="step-meta">Step {{ step.iteration }}</div>
                     </div>
                 </div>
                 {% endfor %}
@@ -617,45 +486,42 @@
                     <div class="step-header">
                         <div class="step-badge">Step {{ loop.index }}</div>
                         <div class="step-title-main">
-                            {% if step.action %}
-                                Tool Call: {{ step.action }}
-                            {% else %}
-                                LLM Reasoning
-                            {% endif %}
+                            {{ step.step_type.replace('_', ' ').title() }}
+                            {% if step.tool_name %} - {{ step.tool_name }}{% endif %}
                         </div>
                     </div>
 
-                    {% if step.thought %}
                     <div class="section">
                         <div class="section-title">
-                            <span class="section-icon">🧠</span>
-                            LLM Thought Process
+                            <span class="section-icon">📝</span>
+                            Content
                         </div>
-                        <div class="thought-bubble">
-                            {{ step.thought }}
+                        <div class="content-bubble">
+                            {{ step.content }}
                         </div>
                     </div>
-                    {% endif %}
 
-                    {% if step.action %}
+                    {% if step.tool_name %}
                     <div class="section">
                         <div class="section-title">
                             <span class="section-icon">⚡</span>
                             Tool Execution
                         </div>
-                        <div class="action-panel">
-                            <div class="action-header">
-                                <div class="action-name">{{ step.action }}</div>
-                                <span style="color: var(--neutral-600);">Tool called by LLM</span>
+                        <div class="tool-panel">
+                            <div class="tool-header">
+                                <div class="tool-name">{{ step.tool_name }}</div>
+                                <span style="color: var(--neutral-600);">
+                                    {% if step.tool_error %}❌ Failed{% else %}✅ Success{% endif %}
+                                </span>
                             </div>
-                            {% if step.action_input %}
+                            {% if step.tool_input %}
                             <div class="expandable" onclick="toggleExpand(this)">
                                 <div style="display: flex; align-items: center; margin-bottom: 0.5rem;">
                                     <span class="expand-indicator">▶</span>
-                                    <strong style="margin-left: 0.5rem;">Parameters</strong>
+                                    <strong style="margin-left: 0.5rem;">Input Parameters</strong>
                                 </div>
                                 <div class="expandable-content">
-                                    <div class="json-viewer">{{ step.action_input|tojson(indent=2) }}</div>
+                                    <div class="json-viewer">{{ step.tool_input|tojson(indent=2) }}</div>
                                 </div>
                             </div>
                             {% endif %}
@@ -663,40 +529,42 @@
                     </div>
                     {% endif %}
 
-                    {% if step.observation %}
+                    {% if step.tool_output %}
                     <div class="section">
                         <div class="section-title">
-                            <span class="section-icon">👁</span>
-                            Tool Response
+                            <span class="section-icon">📤</span>
+                            Tool Output
                         </div>
-                        <div class="observation-panel">
+                        <div class="output-panel">
                             <div class="expandable" onclick="toggleExpand(this)">
                                 <div style="display: flex; align-items: center; margin-bottom: 0.5rem;">
                                     <span class="expand-indicator">▶</span>
                                     <strong style="margin-left: 0.5rem;">Response Data</strong>
                                     <span style="margin-left: auto; font-size: 0.875rem; color: var(--neutral-500);">
-                                        {{ step.observation|length }} characters
+                                        {{ step.tool_output|length }} characters
                                     </span>
                                 </div>
                                 <div class="expandable-content">
-                                    <div class="code-block">{{ _truncate_observation(step.observation) }}</div>
+                                    <div class="code-block">{{ step.tool_output[:2000] }}{% if step.tool_output|length > 2000 %}...{% endif %}</div>
                                 </div>
                             </div>
                         </div>
                     </div>
                     {% endif %}
 
-                    {% if step.tokens_used %}
+                    {% if step.usage_stats %}
                     <div class="section">
                         <div class="section-title">
                             <span class="section-icon">📊</span>
-                            Token Usage
+                            Usage Statistics
                         </div>
-                        <div class="token-usage">
-                            <div class="token-item">
-                                <div class="token-value">{{ step.tokens_used }}</div>
-                                <div class="token-label">Step Total</div>
+                        <div class="metadata-grid">
+                            {% for key, value in step.usage_stats.items() %}
+                            <div class="metadata-item">
+                                <div class="metadata-value">{{ value }}</div>
+                                <div class="metadata-label">{{ key.replace('_', ' ') }}</div>
                             </div>
+                            {% endfor %}
                         </div>
                     </div>
                     {% endif %}
@@ -706,7 +574,7 @@
                 <div class="step-content" id="step-final">
                     <div class="step-header">
                         <div class="step-badge" style="background: var(--success);">🎯 Final</div>
-                        <div class="step-title-main">Agent Result</div>
+                        <div class="step-title-main">Execution Result</div>
                     </div>
 
                     <div class="result-panel">
@@ -714,25 +582,77 @@
                         <div style="line-height: 1.6;">{{ result.final_answer | e | markdown | safe }}</div>
                     </div>
 
-                    {% if total_tokens %}
                     <div class="section">
                         <div class="section-title">
                             <span class="section-icon">📈</span>
-                            Total Execution Metrics
+                            Execution Metadata
                         </div>
-                        <div class="token-usage">
-                            <div class="token-item">
-                                <div class="token-value">{{ "{:,}".format(total_tokens) }}</div>
-                                <div class="token-label">Total Tokens</div>
+                        <div class="metadata-grid">
+                            <div class="metadata-item">
+                                <div class="metadata-value">{{ metadata.session_id or 'Unknown' }}</div>
+                                <div class="metadata-label">Session ID</div>
                             </div>
-                            <div class="token-item">
-                                <div class="token-value">{{ result.steps|length }}</div>
-                                <div class="token-label">Steps</div>
+                            <div class="metadata-item">
+                                <div class="metadata-value">{{ metadata.model_used or 'Unknown' }}</div>
+                                <div class="metadata-label">Model Used</div>
                             </div>
-                            <div class="token-item">
-                                <div class="token-value">{{ "%.2f"|format(result.execution_time_seconds) }}s</div>
-                                <div class="token-label">Duration</div>
+                            {% if metadata.total_cost_usd %}
+                            <div class="metadata-item">
+                                <div class="metadata-value">${{ "%.4f"|format(metadata.total_cost_usd) }}</div>
+                                <div class="metadata-label">Total Cost</div>
                             </div>
+                            {% endif %}
+                            <div class="metadata-item">
+                                <div class="metadata-value">{{ result.steps|length }}</div>
+                                <div class="metadata-label">Total Steps</div>
+                            </div>
+                            <div class="metadata-item">
+                                <div class="metadata-value">{{ "%.2f"|format(result.execution_time_seconds) }}s</div>
+                                <div class="metadata-label">Duration</div>
+                            </div>
+                            {% if metadata.mcp_servers_used %}
+                            <div class="metadata-item">
+                                <div class="metadata-value">{{ metadata.mcp_servers_used|length }}</div>
+                                <div class="metadata-label">MCP Servers</div>
+                            </div>
+                            {% endif %}
+                            {% if metadata.tools_available %}
+                            <div class="metadata-item">
+                                <div class="metadata-value">{{ metadata.tools_available|length }}</div>
+                                <div class="metadata-label">Available Tools</div>
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    {% if metadata.mcp_servers_used %}
+                    <div class="section">
+                        <div class="section-title">
+                            <span class="section-icon">🔧</span>
+                            MCP Servers Used
+                        </div>
+                        <div style="display: flex; flex-wrap: wrap; gap: 0.5rem;">
+                            {% for server in metadata.mcp_servers_used %}
+                            <span style="background: var(--info-light); color: var(--info); padding: 0.25rem 0.75rem; border-radius: 12px; font-size: 0.875rem;">
+                                {{ server }}
+                            </span>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    {% if metadata.tools_available %}
+                    <div class="section">
+                        <div class="section-title">
+                            <span class="section-icon">🛠️</span>
+                            Available Tools
+                        </div>
+                        <div style="display: flex; flex-wrap: wrap; gap: 0.5rem;">
+                            {% for tool in metadata.tools_available %}
+                            <span style="background: var(--success-light); color: var(--success); padding: 0.25rem 0.75rem; border-radius: 12px; font-size: 0.875rem;">
+                                {{ tool }}
+                            </span>
+                            {% endfor %}
                         </div>
                     </div>
                     {% endif %}

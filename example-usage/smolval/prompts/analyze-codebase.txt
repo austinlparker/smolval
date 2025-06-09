@@ -1,0 +1,16 @@
+Analyze this codebase and provide a comprehensive overview:
+
+1. **Project Structure**: Examine the directory structure and identify the main components
+2. **Technology Stack**: Identify the programming languages, frameworks, and tools used
+3. **Architecture**: Describe the overall architecture and design patterns
+4. **Key Files**: Identify and explain the purpose of important configuration files
+5. **Dependencies**: Review package.json, requirements.txt, or similar dependency files
+6. **Documentation**: Check for README files and assess documentation quality
+7. **Testing**: Look for test files and testing frameworks
+8. **Build System**: Identify build tools, CI/CD configurations
+
+Please provide:
+- A summary of what this project does
+- Key architectural decisions
+- Areas that could benefit from improvement
+- Suggestions for better organization or documentation

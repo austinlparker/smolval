@@ -1,22 +1,19 @@
 # CLI Reference
 
-This document provides a complete reference for the smolval command-line interface.
+This document provides a complete reference for the smolval command-line interface. smolval is designed to run in a Docker container with Claude Code CLI pre-installed.
 
 ## Installation
 
-First, ensure smolval is installed and available in your PATH:
+### Container Usage (Recommended)
 
 ```bash
-# With uv (recommended)
-uv sync --all-extras
+# Build the container
+docker build -t ghcr.io/austinlparker/smolval .
 
-# Run commands with uv
-uv run python -m smolval.cli --help
-
-# Or install globally
-uv pip install -e .
-smolval --help
+# Run help to verify installation
+docker run --rm ghcr.io/austinlparker/smolval --help
 ```
+
 
 ## Main Command
 
@@ -36,23 +33,32 @@ A lightweight MCP server evaluation agent for testing Model Context Protocol imp
 | `--no-banner` | Disable ASCII banner display |
 | `--help` | Show help message and exit |
 
-### Example
+### Container Examples
 ```bash
 # Show version
-smolval --version
+docker run --rm ghcr.io/austinlparker/smolval --version
 
 # Run with verbose logging
-smolval --verbose eval prompts/test.txt
+docker run --rm \
+  -v $(pwd):/workspace \
+  -e ANTHROPIC_API_KEY \
+  ghcr.io/austinlparker/smolval --verbose eval /workspace/prompts/test.txt
 
 # Run with debug logging and no banner
-smolval --debug --no-banner eval prompts/test.txt
+docker run --rm \
+  -v $(pwd):/workspace \
+  -e ANTHROPIC_API_KEY \
+  ghcr.io/austinlparker/smolval --debug --no-banner eval /workspace/prompts/test.txt
 ```
+
 
 ## Commands
 
+**Note**: The current version focuses on single prompt evaluation. Batch processing and server comparison features have been simplified to focus on Claude Code CLI integration.
+
 ### eval
 
-Evaluate MCP servers using a single prompt file.
+Evaluate MCP servers using Claude Code CLI with a single prompt file.
 
 ```
 smolval eval PROMPT_FILE [OPTIONS]
@@ -68,207 +74,193 @@ smolval eval PROMPT_FILE [OPTIONS]
 
 | Option | Default | Description |
 |--------|---------|-------------|
-| `--config, -c` | `config/example-anthropic.yaml` | Configuration file path |
-| `--output-dir` | `results` | Output directory for results |
-| `--run-name` | _(prompt filename)_ | Name for this evaluation run |
+| `--mcp-config` | `.mcp.json` | MCP configuration file path |
+| `--timeout` | `300` | Timeout in seconds for Claude Code execution |
+| `--format` | `json` | Output format: json, markdown, html, csv |
+| `--output` | _(auto-generated)_ | Output file path |
+| `--verbose` | `False` | Show Claude CLI stdout/stderr |
+| `--no-progress` | `False` | Disable progress indicator |
 
-#### Examples
+#### Container Examples
 
 ```bash
-# Basic evaluation
-smolval eval prompts/file-operations.txt
+# Basic evaluation using Claude Code's built-in tools
+docker run --rm \
+  -v $(pwd):/workspace \
+  -e ANTHROPIC_API_KEY \
+  ghcr.io/austinlparker/smolval eval /workspace/prompts/file-operations.txt
 
-# With custom config and output directory
-smolval eval prompts/web-test.txt -c config/my-config.yaml --output-dir custom-results
+# With custom MCP configuration
+docker run --rm \
+  -v $(pwd):/workspace \
+  -v /var/run/docker.sock:/var/run/docker.sock \
+  -e ANTHROPIC_API_KEY \
+  ghcr.io/austinlparker/smolval eval /workspace/prompts/database-test.txt --mcp-config /workspace/.mcp.json
 
-# With custom run name
-smolval eval prompts/database.txt --run-name "db-performance-test"
+# With specific output format
+docker run --rm \
+  -v $(pwd):/workspace \
+  -e ANTHROPIC_API_KEY \
+  ghcr.io/austinlparker/smolval eval /workspace/prompts/test.txt --format html --output /workspace/report.html
 
-# Verbose output with debug config
-smolval --verbose eval prompts/test.txt -c config/debug.yaml
+# Verbose output to see Claude CLI interaction
+docker run --rm \
+  -v $(pwd):/workspace \
+  -e ANTHROPIC_API_KEY \
+  ghcr.io/austinlparker/smolval eval /workspace/prompts/test.txt --verbose
+
+# With custom timeout
+docker run --rm \
+  -v $(pwd):/workspace \
+  -e ANTHROPIC_API_KEY \
+  ghcr.io/austinlparker/smolval eval /workspace/prompts/test.txt --timeout 600
 ```
+
 
 #### Output
 
-Creates a timestamped directory in the output folder containing:
-- `evaluation_{run_name}.json` - Structured evaluation data
-- `evaluation_{run_name}.csv` - Tabular results
-- `evaluation_{run_name}.md` - Markdown report
-- `evaluation_{run_name}.html` - HTML report
+Generates a single result file in the specified format:
+- **JSON**: Structured evaluation data with steps, metadata, and results
+- **Markdown**: Human-readable report with conversation flow
+- **HTML**: Rich HTML report with syntax highlighting and formatting
+- **CSV**: Tabular data suitable for analysis and comparison
 
-### batch
+Default output filename: `smolval_result_{timestamp}.{format}`
 
-Run multiple prompts from a directory in batch mode.
+## Environment Variables
 
-```
-smolval batch PROMPTS_DIR [OPTIONS]
-```
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `ANTHROPIC_API_KEY` | Yes | Your Anthropic API key for Claude Code CLI |
+| `CLAUDE_CONFIG_DIR` | No | Claude CLI configuration directory (defaults to `/app/.claude` in container) |
 
-#### Arguments
+## MCP Configuration
 
-| Argument | Type | Required | Description |
-|----------|------|----------|-------------|
-| `PROMPTS_DIR` | Path | Yes | Directory containing prompt files (.txt, .md) |
+smolval uses the standard `.mcp.json` configuration format:
 
-#### Options
-
-| Option | Default | Description |
-|--------|---------|-------------|
-| `--config, -c` | `config/example-anthropic.yaml` | Configuration file path |
-| `--output-dir` | `results` | Output directory for results |
-| `--run-name` | `batch_{directory_name}` | Name for this batch run |
-| `--servers` | _(all configured)_ | Comma-separated server names to filter |
-
-#### Examples
-
-```bash
-# Run all prompts in directory
-smolval batch prompts/
-
-# Filter to specific servers
-smolval batch prompts/ --servers filesystem,fetch
-
-# Custom batch name and output
-smolval batch test-prompts/ --run-name "integration-tests" --output-dir ci-results
-
-# Production batch with specific config
-smolval batch prompts/ -c config/production.yaml --output-dir prod-results
-```
-
-#### Output
-
-Creates individual evaluation files for each prompt plus:
-- `batch_summary_{run_name}.json` - Batch execution summary
-- `batch_summary_{run_name}.csv` - Success/failure statistics
-- `batch_summary_{run_name}.md` - Batch report
-- `batch_summary_{run_name}.html` - HTML batch report
-
-#### Batch Behavior
-
-- Processes all `.txt` and `.md` files in the specified directory
-- Continues processing even if individual prompts fail
-- Reports overall success rate and timing statistics
-- Skips invalid or inaccessible files with warnings
-
-### compare
-
-Compare the performance of two MCP servers using the same set of prompts.
-
-```
-smolval compare --baseline BASELINE --test TEST PROMPTS_DIR [OPTIONS]
-```
-
-#### Required Options
-
-| Option | Description |
-|--------|-------------|
-| `--baseline` | Name of the baseline server (must exist in config) |
-| `--test` | Name of the test server to compare against baseline |
-
-#### Arguments
-
-| Argument | Type | Required | Description |
-|----------|------|----------|-------------|
-| `PROMPTS_DIR` | Path | Yes | Directory containing prompt files for comparison |
-
-#### Options
-
-| Option | Default | Description |
-|--------|---------|-------------|
-| `--config, -c` | `config/example-anthropic.yaml` | Configuration file path |
-| `--output-dir` | `results` | Output directory for comparison results |
-| `--run-name` | `compare_{baseline}_vs_{test}` | Name for this comparison run |
-
-#### Examples
-
-```bash
-# Basic server comparison
-smolval compare --baseline filesystem --test fetch prompts/
-
-# Compare database servers
-smolval compare --baseline postgres --test postgresv2 prompts/db-tests/
-
-# Custom comparison with specific config
-smolval compare --baseline old-server --test new-server prompts/ \
-  -c config/comparison.yaml --run-name "migration-test"
-
-# Production comparison
-smolval compare --baseline prod-v1 --test prod-v2 prompts/benchmarks/ \
-  --output-dir comparison-results
-```
-
-#### Output
-
-Creates comparison analysis files:
-- `comparison_{run_name}.json` - Detailed comparison data
-- `comparison_{run_name}.csv` - Comparison metrics table
-- `comparison_{run_name}.md` - Comparison report
-- `comparison_{run_name}.html` - Interactive comparison report
-
-#### Comparison Metrics
-
-The comparison analyzes:
-- **Success Rate**: Percentage of successful evaluations
-- **Average Execution Time**: Mean time per evaluation
-- **Average Iterations**: Mean ReAct loop iterations
-- **Failed Tool Calls**: Number of tool execution failures
-- **Token Usage**: LLM token consumption (if available)
-- **Overall Winner**: Best performing server across metrics
-
-## Output Formats
-
-All commands generate results in multiple formats:
-
-### JSON Format
 ```json
 {
-  "evaluation_name": "test",
-  "timestamp": "2024-01-15T10:30:00Z",
-  "success": true,
-  "execution_time": 12.5,
-  "iterations": 3,
-  "messages": [...],
-  "tool_calls": [...],
-  "performance_metrics": {...}
+  "mcpServers": {
+    "sqlite": {
+      "command": "docker",
+      "args": ["run", "--rm", "-i", "mcp/sqlite"],
+      "env": {}
+    },
+    "filesystem": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-filesystem", "/workspace"],
+      "env": {}
+    }
+  }
 }
 ```
 
-### CSV Format
-Tabular data suitable for spreadsheet analysis with columns:
-- evaluation_name, timestamp, success, execution_time, iterations, etc.
+**Note**: Claude Code has filesystem and web fetch capabilities built-in, so MCP servers are only needed for additional functionality.
 
-### Markdown Format
-Human-readable reports with:
-- Executive summary
-- Tool call breakdown
-- Performance metrics
-- Full conversation log
+## Docker Usage Patterns
 
-### HTML Format
-Interactive web reports with:
-- Collapsible sections
-- Syntax-highlighted code blocks
-- Performance charts
-- Responsive design
+### Volume Mounting
 
-## Configuration
+```bash
+# Basic workspace mount
+-v $(pwd):/workspace
 
-All commands accept a configuration file via the `--config` option. See [Configuration Reference](config-reference.md) for details.
+# Docker-in-Docker for containerized MCP servers
+-v /var/run/docker.sock:/var/run/docker.sock
 
-### Default Configuration Lookup
+# Custom output directory
+-v $(pwd)/results:/results
 
-If no config is specified, smolval looks for:
-1. `config/example-anthropic.yaml` (default)
-2. `config/default.yaml`
-3. `smolval.yaml` in current directory
+# Mount specific config file
+-v $(pwd)/custom.mcp.json:/app/.mcp.json
+```
 
-### Environment Variables
+### Common Docker Commands
 
-Configuration files support environment variable expansion:
-```yaml
-llm:
-  api_key: "${ANTHROPIC_API_KEY}"
-  base_url: "${API_BASE_URL:-https://api.anthropic.com}"
+```bash
+# Development shell
+docker run -it --rm \
+  -v $(pwd):/workspace \
+  -v /var/run/docker.sock:/var/run/docker.sock \
+  -e ANTHROPIC_API_KEY \
+  -w /workspace \
+  ghcr.io/austinlparker/smolval bash
+
+# Run tests
+docker run --rm \
+  -v $(pwd):/workspace \
+  -w /workspace \
+  ghcr.io/austinlparker/smolval uv run pytest
+
+# Code quality checks
+docker run --rm \
+  -v $(pwd):/workspace \
+  -w /workspace \
+  ghcr.io/austinlparker/smolval bash -c "uv run black src/ tests/ && uv run mypy src/"
+```
+
+## Docker Compose Usage
+
+For easier development, use the included `docker-compose.yml`:
+
+```bash
+# Start development container
+docker-compose up -d
+
+# Interactive development shell
+docker-compose exec smolval bash
+
+# Run evaluation
+docker-compose exec smolval smolval eval /workspace/prompts/test.txt
+
+# Stop and clean up
+docker-compose down
+```
+
+## Troubleshooting
+
+### Common Issues
+
+1. **Missing API Key**
+   ```
+   Error: No API key found
+   ```
+   Solution: Ensure `-e ANTHROPIC_API_KEY` is included in docker run
+
+2. **File Not Found**
+   ```
+   Error: No such file or directory: '/workspace/prompts/test.txt'
+   ```
+   Solution: Check volume mount and file paths
+
+3. **MCP Server Issues**
+   ```
+   Error: MCP server command failed
+   ```
+   Solution: For Docker-based MCP servers, add Docker socket mount
+
+4. **Permission Issues**
+   ```
+   Error: Permission denied
+   ```
+   Solution: Check file permissions or run as root with `--user root`
+
+### Debug Commands
+
+```bash
+# Check Claude CLI version in container
+docker run --rm ghcr.io/austinlparker/smolval claude --version
+
+# List available tools
+docker run --rm ghcr.io/austinlparker/smolval which claude
+
+# Check environment
+docker run --rm -e ANTHROPIC_API_KEY ghcr.io/austinlparker/smolval env | grep ANTHROPIC
+
+# Test MCP config parsing
+docker run --rm \
+  -v $(pwd):/workspace \
+  ghcr.io/austinlparker/smolval cat /workspace/.mcp.json
 ```
 
 ## Exit Codes
@@ -276,146 +268,8 @@ llm:
 | Code | Meaning |
 |------|---------|
 | 0 | Success |
-| 1 | General error (configuration, file not found, etc.) |
-| 2 | Evaluation failure (timeout, server error, etc.) |
-| 3 | No servers configured or available |
-
-## Common Usage Patterns
-
-### Development Workflow
-```bash
-# Quick test with debug output
-smolval --debug eval prompts/dev-test.txt -c config/dev.yaml
-
-# Batch test all prompts
-smolval batch prompts/ --output-dir dev-results
-
-# Compare development vs production servers
-smolval compare --baseline dev --test prod prompts/
-```
-
-### CI/CD Integration
-```bash
-# Production evaluation with specific output location
-smolval batch prompts/ -c config/ci.yaml --output-dir /var/log/smolval
-
-# Server migration validation
-smolval compare --baseline old --test new prompts/migration-tests/ \
-  --output-dir migration-results --run-name "$(date +%Y%m%d)"
-```
-
-### Performance Testing
-```bash
-# Benchmark single server
-smolval eval prompts/performance.txt --run-name "benchmark-$(date +%s)"
-
-# Compare server performance
-smolval compare --baseline v1 --test v2 prompts/benchmarks/ \
-  --run-name "perf-comparison"
-```
-
-### Local Development with Ollama
-```bash
-# Test with local LLM (no API key required)
-smolval eval prompts/test.txt -c config/ollama.yaml
-
-# Batch test with local model
-smolval batch prompts/ -c config/ollama.yaml --output-dir local-results
-```
-
-## Troubleshooting
-
-### Common Issues
-
-1. **Configuration not found**
-   ```
-   Error: Configuration file not found: config/missing.yaml
-   ```
-   Solution: Check file path or create the configuration file
-
-2. **No MCP servers configured**
-   ```
-   Error: No MCP servers found in configuration
-   ```
-   Solution: Add MCP server definitions to your config file
-
-3. **Server connection failed**
-   ```
-   Error: Failed to connect to MCP server 'filesystem'
-   ```
-   Solution: Verify server command and dependencies are installed
-
-4. **API key missing**
-   ```
-   Error: No API key found for provider 'anthropic'
-   ```
-   Solution: Set environment variable or update config file
-
-### Debug Mode
-
-Use `--debug` flag for detailed troubleshooting:
-```bash
-smolval --debug eval prompts/test.txt
-```
-
-This enables:
-- Detailed connection logs
-- Full MCP protocol messages
-- LLM request/response details
-- Timing information
-
-### Verbose Mode
-
-Use `--verbose` for general progress information:
-```bash
-smolval --verbose batch prompts/
-```
-
-This shows:
-- Server connection status
-- Prompt processing progress
-- Basic timing information
-- Success/failure summaries
-
-## Integration Examples
-
-### Shell Scripts
-```bash
-#!/bin/bash
-# run-evaluation.sh
-
-TIMESTAMP=$(date +%Y%m%d_%H%M%S)
-OUTPUT_DIR="results/eval_${TIMESTAMP}"
-
-smolval batch prompts/ \
-  --output-dir "${OUTPUT_DIR}" \
-  --run-name "automated-eval" \
-  -c config/production.yaml
-
-echo "Results available in: ${OUTPUT_DIR}"
-```
-
-### Make Targets
-```makefile
-# Makefile
-.PHONY: test-mcp test-compare
-
-test-mcp:
-	smolval batch prompts/ -c config/test.yaml --output-dir test-results
-
-test-compare:
-	smolval compare --baseline filesystem --test fetch prompts/ \
-		--output-dir comparison-results
-```
-
-### Docker Integration
-```bash
-# Run in container
-docker run --rm \
-  -v $(pwd)/prompts:/prompts \
-  -v $(pwd)/results:/results \
-  -e ANTHROPIC_API_KEY \
-  smolval batch /prompts --output-dir /results
-```
-
-This CLI reference covers all available commands and options. For configuration details, see [Configuration Reference](config-reference.md). For prompt writing guidance, see [Writing Prompts](writing-prompts.md).
+| 1 | General error |
+| 2 | Missing required arguments |
+| 3 | Configuration error |
+| 4 | Claude CLI not found |
+| 5 | Timeout error |

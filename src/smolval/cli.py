@@ -1,43 +1,36 @@
 """Command-line interface for smolval."""
 
 import asyncio
-import json
 import logging
-import os
 import sys
-import time
+from datetime import datetime
 from pathlib import Path
-from typing import Any
 
 import click
 
-from .agent import Agent, ClaudeCodeAgent
-from .config import Config
-from .judge import JudgedResult, LLMJudge
-from .llm_client import LLMClient
-from .mcp_client import MCPClientManager
+from .agent import ClaudeCodeAgent
 from .output_manager import OutputManager
 
 
-async def _connect_mcp_servers_silently(
-    mcp_manager: MCPClientManager, server_configs: list, debug: bool = False
-) -> None:
-    """Connect to MCP servers while suppressing OS-level stderr noise."""
-    if debug:
-        # Don't suppress stderr in debug mode
-        for server_config in server_configs:
-            await mcp_manager.connect(server_config, debug=True)
-    else:
-        stderr_fd = os.dup(2)
-        devnull = os.open(os.devnull, os.O_WRONLY)
-        os.dup2(devnull, 2)
-        try:
-            for server_config in server_configs:
-                await mcp_manager.connect(server_config, debug=False)
-        finally:
-            os.dup2(stderr_fd, 2)
-            os.close(stderr_fd)
-            os.close(devnull)
+def _generate_output_path(prompt_file: Path, output_format: str) -> Path:
+    """Generate timestamped output path in results directory."""
+    # Create results directory if it doesn't exist
+    results_dir = Path("results")
+    results_dir.mkdir(exist_ok=True)
+
+    # Generate timestamp
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+
+    # Get prompt file name without extension
+    prompt_name = prompt_file.stem
+
+    # Determine file extension
+    extension_map = {"json": "json", "markdown": "md", "csv": "csv", "html": "html"}
+    extension = extension_map.get(output_format, output_format)
+
+    # Generate final path
+    filename = f"{timestamp}_{prompt_name}.{extension}"
+    return results_dir / filename
 
 
 def _show_banner() -> None:
@@ -50,1189 +43,210 @@ def _show_banner() -> None:
     ███████║██║ ╚═╝ ██║╚██████╔╝███████╗╚████╔╝ ██║  ██║███████╗
     ╚══════╝╚═╝     ╚═╝ ╚═════╝ ╚══════╝ ╚═══╝  ╚═╝  ╚═╝╚══════╝
 
-    🤖 A lightweight MCP server evaluation agent
+    Lightweight MCP server evaluation using Claude Code CLI
     """
-    click.echo(click.style(banner, fg="cyan", bold=True))
-
-
-def _create_agent(config: Config, llm_client: LLMClient | None, mcp_manager: MCPClientManager) -> Agent | ClaudeCodeAgent:
-    """Create the appropriate agent based on configuration."""
-    if config.evaluation.agent_type == "claude_code":
-        return ClaudeCodeAgent(config, mcp_manager)
-    else:
-        if llm_client is None:
-            raise ValueError("LLM client required for ReAct agent")
-        return Agent(config, llm_client, mcp_manager)
+    click.echo(click.style(banner, fg="blue"))
 
 
 @click.group()
-@click.version_option(version="0.1.0")
-@click.option("--verbose", "-v", is_flag=True, help="Enable verbose logging")
-@click.option("--debug", is_flag=True, help="Enable debug logging")
-@click.option("--no-banner", is_flag=True, help="Disable ASCII banner")
-@click.pass_context
-def main(ctx: click.Context, verbose: bool, debug: bool, no_banner: bool) -> None:
-    """smolval: A lightweight MCP server evaluation agent."""
-    # Store flags in context for commands to use
-    ctx.ensure_object(dict)
-    ctx.obj["no_banner"] = no_banner
-    ctx.obj["debug"] = debug
+@click.option("--debug", is_flag=True, help="Enable debug logging for troubleshooting")
+@click.option("--no-banner", is_flag=True, help="Skip the ASCII banner display")
+def cli(debug: bool, no_banner: bool) -> None:
+    """Smolval - Lightweight MCP server evaluation with Claude Code.
 
-    # Configure logging
-    if debug:
-        level = logging.DEBUG
-    elif verbose:
-        level = logging.INFO
-    else:
-        level = logging.WARNING
+    Smolval is a Python wrapper around Claude Code CLI that simplifies evaluating
+    MCP (Model Context Protocol) servers. It executes prompts through Claude Code
+    and provides structured output in multiple formats.
 
+    Examples:
+      # Evaluate with default settings (auto-saves to results/ directory)
+      smolval eval prompts/test.txt
+
+      # Use custom MCP config with JSON output
+      smolval eval prompts/test.txt --mcp-config custom.mcp.json --format json
+
+      # Verbose mode with extended timeout
+      smolval eval prompts/complex-task.txt --verbose --timeout 600
+
+    For more information, visit: https://github.com/austinlparker/smolval
+    """
+    if not no_banner:
+        _show_banner()
+
+    # Set up logging
+    log_level = logging.DEBUG if debug else logging.INFO
     logging.basicConfig(
-        level=level,
+        level=log_level,
         format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-        datefmt="%Y-%m-%d %H:%M:%S",
     )
 
 
-@main.command()
-@click.argument("prompt_file", type=click.Path(exists=True))
-@click.option(
-    "--config",
-    "-c",
-    default="config/example-anthropic.yaml",
-    help="Configuration file path",
+@cli.command()
+@click.argument(
+    "prompt_file", type=click.Path(exists=True, path_type=Path), metavar="PROMPT_FILE"
 )
-@click.option("--output-dir", help="Output directory for results")
-@click.option("--run-name", help="Name for this evaluation run")
 @click.option(
-    "--judge",
+    "--mcp-config",
+    type=click.Path(path_type=Path),
+    default=".mcp.json",
+    show_default=True,
+    help="Path to MCP configuration file. If not found, Claude Code will use built-in tools only.",
+)
+@click.option(
+    "--timeout",
+    type=int,
+    default=300,
+    show_default=True,
+    help="Maximum time in seconds to wait for Claude Code execution. Use 0 for no timeout.",
+)
+@click.option(
+    "--format",
+    "output_format",
+    type=click.Choice(["json", "markdown", "csv", "html"]),
+    default="markdown",
+    show_default=True,
+    help="Output format: json (structured data), markdown (human-readable), csv (tabular), html (rich web format).",
+)
+@click.option(
+    "--output",
+    type=click.Path(path_type=Path),
+    help="Custom output file path. If not specified, results are saved to results/<timestamp>_<prompt-name>.<format>.",
+)
+@click.option(
+    "--verbose",
     is_flag=True,
-    help="Enable LLM-as-judge evaluation for quality assessment",
+    help="Enable verbose mode: show detailed progress, Claude CLI output, and execution summary.",
 )
 @click.option(
-    "--judge-model", help="Specific model to use for LLM judgment (e.g., 'gpt-4')"
+    "--no-progress",
+    is_flag=True,
+    help="Disable the progress spinner. Useful for scripts or when redirecting output.",
 )
-@click.pass_context
+@click.option(
+    "--env-file",
+    type=click.Path(exists=True, path_type=Path),
+    help="Path to .env file for environment variables. Defaults to .env in current directory.",
+)
 def eval(
-    ctx: click.Context,
-    prompt_file: str,
-    config: str,
-    output_dir: str,
-    run_name: str,
-    judge: bool,
-    judge_model: str,
+    prompt_file: Path,
+    mcp_config: Path,
+    timeout: int,
+    output_format: str,
+    output: Path | None,
+    verbose: bool,
+    no_progress: bool,
+    env_file: Path | None,
 ) -> None:
-    """Evaluate MCP servers using a prompt file."""
-    # Show banner unless disabled
-    if not ctx.obj.get("no_banner", False):
-        _show_banner()
+    """Evaluate a prompt file using Claude Code CLI with optional MCP servers.
 
-    debug = ctx.obj.get("debug", False)
-    asyncio.run(
-        _run_eval(prompt_file, config, output_dir, run_name, debug, judge, judge_model)
-    )
+    This command executes the content of PROMPT_FILE through Claude Code CLI,
+    optionally using MCP (Model Context Protocol) servers for enhanced capabilities
+    like database access, API integrations, or specialized tools.
 
+    Results are automatically saved to timestamped files in the results/ directory
+    unless a custom output path is specified. The filename format is:
+    results/<YYYYMMDD_HHMMSS>_<prompt-name>.<extension>
 
-async def _run_eval(
-    prompt_file: str,
-    config_path: str,
-    output_dir: str,
-    run_name: str,
-    debug: bool = False,
-    enable_judge: bool = False,
-    judge_model: str | None = None,
-) -> None:
-    """Run evaluation asynchronously."""
-    logger = logging.getLogger(__name__)
-    mcp_manager = None
+    PROMPT_FILE should contain the text prompt you want Claude to process.
+    The prompt can request file operations, web searches, or MCP server interactions.
 
-    try:
-        # Load configuration
-        click.echo(f"Loading config from: {config_path}")
-        logger.debug("Loading configuration from %s", config_path)
-        config = Config.from_yaml(Path(config_path))
+    \b
+    Examples:
+      # Basic evaluation with default settings
+      smolval eval prompts/simple-task.txt
 
-        # Load prompt
-        click.echo(f"Loading prompt from: {prompt_file}")
-        with open(prompt_file) as f:
-            prompt = f.read().strip()
+      # Use custom MCP config for database access
+      smolval eval prompts/database-query.txt --mcp-config configs/postgres.mcp.json
 
-        # Initialize components
-        llm_client = None
-        if config.evaluation.agent_type != "claude_code":
-            click.echo("Initializing LLM client...")
-            llm_client = LLMClient(config.llm)
+      # Generate structured JSON output (auto-saved to results/ directory)
+      smolval eval prompts/analysis.txt --format json
 
-        click.echo("Initializing MCP client manager...")
-        mcp_manager = MCPClientManager()
+      # Verbose mode for debugging or detailed monitoring
+      smolval eval prompts/complex-task.txt --verbose --timeout 600
 
-        # Connect to MCP servers (suppress server startup noise)
-        if config.evaluation.agent_type != "claude_code":
-            click.echo("Connecting to MCP servers...")
-            await _connect_mcp_servers_silently(mcp_manager, config.mcp_servers, debug)
+      # Custom output location
+      smolval eval prompts/batch-task.txt --format csv --output batch-results.csv
 
-        # Initialize agent
-        click.echo(f"Initializing {config.evaluation.agent_type} agent...")
-        agent = _create_agent(config, llm_client, mcp_manager)
+    \b
+    Requirements:
+      - Docker installed on host system
+      - ANTHROPIC_API_KEY environment variable must be set
+      - MCP servers (optional): Only needed for functionality beyond Claude's built-in tools
 
-        # Run evaluation with progress indicator
-        click.echo("Running evaluation...")
+    \b
+    Output Formats:
+      json      - Structured data with execution details, steps, and metadata
+      markdown  - Human-readable format with formatted execution summary
+      csv       - Tabular format suitable for spreadsheets and data analysis
+      html      - Rich web format with interactive timeline and detailed views
+    """
 
-        # Progress indicator
-        spinner_chars = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
-        spinner_idx = 0
-        current_step = 0
+    async def run_evaluation() -> None:
+        # Read the prompt
+        try:
+            prompt_content = prompt_file.read_text(encoding="utf-8")
+        except Exception as e:
+            click.echo(f"Error reading prompt file: {e}", err=True)
+            sys.exit(1)
 
-        def show_progress(step: int, max_step: int) -> None:
-            nonlocal spinner_idx, current_step
-            current_step = step
-            char = spinner_chars[spinner_idx % len(spinner_chars)]
-            spinner_idx += 1
+        if verbose:
+            click.echo(f"📝 Loaded prompt from: {prompt_file}")
+            click.echo(f"🔧 Using MCP config: {mcp_config}")
+            click.echo(f"⏱️  Timeout: {timeout}s")
+            if env_file:
+                click.echo(f"🌍 Environment file: {env_file}")
+            click.echo("🔓 Tool permissions: Always allow all tools for evaluation")
+            click.echo()
 
-            # Clear line and show progress
-            sys.stdout.write(f"\r{char} Step {step}/{max_step}")
-            sys.stdout.flush()
+        # Create agent
+        agent = ClaudeCodeAgent(
+            mcp_config_path=str(mcp_config),
+            timeout_seconds=timeout,
+            verbose=verbose,
+            env_file=str(env_file) if env_file else None,
+        )
 
-        start_time = time.time()
-        result = await agent.run(prompt, progress_callback=show_progress)
-        end_time = time.time()
+        # Run evaluation
+        if verbose:
+            click.echo("🚀 Starting evaluation...")
 
-        # Clear progress line
-        sys.stdout.write(f"\r✅ Completed {current_step} steps\n")
-        sys.stdout.flush()
+        try:
+            # Use progress indicator unless disabled or in verbose mode
+            show_progress = not (verbose or no_progress)
+            result = await agent.run(prompt_content, show_progress=show_progress)
+        except Exception as e:
+            click.echo(f"Error during evaluation: {e}", err=True)
+            sys.exit(1)
 
-        # Format result
-        result_data = {
-            "prompt": prompt,
-            "result": {
-                "success": result.success,
-                "final_answer": result.final_answer,
-                "steps": [step.model_dump() for step in result.steps],
-                "total_iterations": result.total_iterations,
-                "error": result.error,
-                "execution_time_seconds": result.execution_time_seconds,
-                "token_usage": result.token_usage,
-                "failed_tool_calls": result.failed_tool_calls,
-            },
-            "llm_responses": result.llm_responses,
-            "metadata": {
-                "config_file": config_path,
-                "prompt_file": prompt_file,
-                "timestamp": time.time(),
-                "duration_seconds": end_time - start_time,
-                "failed_tool_calls": result.failed_tool_calls,
-            },
-        }
+        # Format output
+        output_manager = OutputManager()
+        formatted_output = output_manager.format_result(result, output_format)
 
-        # Run LLM-as-judge evaluation if requested
-        final_result_data = result_data  # Default to original result
-        if enable_judge or config.evaluation.judge.enabled:
-            click.echo("Running LLM-as-judge evaluation...")
-
-            try:
-                # Create judge LLM client (use separate model if specified)
-                judge_config = config.llm
-                if judge_model:
-                    # Create a copy with the specified model
-                    judge_config = judge_config.model_copy()
-                    judge_config.model = judge_model
-                elif config.evaluation.judge.model:
-                    judge_config = judge_config.model_copy()
-                    judge_config.model = config.evaluation.judge.model
-
-                judge_llm_client = LLMClient(judge_config)
-                judge = LLMJudge(judge_llm_client, judge_model=judge_config.model)
-
-                # Run judgment
-                judgment = await judge.judge_result(result_data, prompt)
-
-                # Create judged result
-                judged_result = JudgedResult(
-                    original_result=result_data,
-                    judgment=judgment,
-                    metadata={
-                        "judge_model": judge_config.model,
-                        "judge_provider": judge_config.provider,
-                        "criteria_count": len(judgment.scores),
-                    },
-                )
-
-                # Update result data to include judgment
-                final_result_data = judged_result.model_dump()
-
-                # Show judgment summary
-                click.echo(
-                    f"📊 Overall Quality Score: {judgment.overall_score:.2f}/1.0"
-                )
-                click.echo("\n🎯 Criterion Scores:")
-                for score in judgment.scores:
-                    click.echo(f"  • {score.criterion}: {score.score:.2f}")
-
-                if judgment.strengths:
-                    click.echo(f"\n✅ Strengths: {', '.join(judgment.strengths[:3])}")
-                if judgment.weaknesses:
-                    click.echo(
-                        f"⚠️  Areas for improvement: {', '.join(judgment.weaknesses[:3])}"
-                    )
-
-            except Exception as e:
-                click.echo(f"⚠️ Judge evaluation failed: {e}")
-                logger.warning("Judge evaluation failed: %s", e)
-                # Continue with original result
-
-        # Output result using OutputManager
-        if output_dir:
-            # Use output manager with specified directory
-            output_manager = OutputManager(output_dir)
+        # Determine output path - use custom path or auto-generate
+        if output:
+            output_path = output
         else:
-            # Use default directory and show console output too
-            output_manager = OutputManager("results")
-
-        # Create run directory
-        if run_name:
-            output_manager.create_run_directory(run_name)
-        else:
-            output_manager.create_run_directory()
-
-        # Generate eval name from prompt file
-        prompt_path = Path(prompt_file)
-        eval_name = prompt_path.stem
-
-        # Write results in all formats
-        output_files = output_manager.write_evaluation_results(
-            final_result_data, eval_name
-        )
-
-        click.echo(f"Results written to: {output_manager.get_run_directory()}")
-        for format_type, file_path in output_files.items():
-            click.echo(f"  {format_type.upper()}: {file_path}")
-
-        if result.success:
-            click.echo("✅ Evaluation completed successfully")
-        else:
-            click.echo("❌ Evaluation failed")
-            if result.error:
-                click.echo(f"Error: {result.error}")
-
-    except Exception as e:
-        click.echo(f"❌ Evaluation failed with error: {e}")
-        raise click.ClickException(str(e)) from e
-
-    finally:
-        # Always clean up MCP connections
-        if mcp_manager is not None:
-            try:
-                logger.debug("Starting MCP cleanup...")
-                # Add timeout to prevent hanging
-                await asyncio.wait_for(mcp_manager.close(), timeout=5.0)
-                logger.debug("MCP cleanup completed")
-            except TimeoutError:
-                logger.warning("MCP cleanup timed out - forcing exit")
-            except Exception as cleanup_error:
-                logger.warning("Error during MCP cleanup: %s", cleanup_error)
-
-
-@main.command()
-@click.argument("prompts_dir", type=click.Path(exists=True))
-@click.option(
-    "--config",
-    "-c",
-    default="config/example-anthropic.yaml",
-    help="Configuration file path",
-)
-@click.option("--output-dir", help="Output directory for results")
-@click.option("--run-name", help="Name for this batch run")
-@click.option("--servers", help="Comma-separated list of server names to filter")
-@click.pass_context
-def batch(
-    ctx: click.Context,
-    prompts_dir: str,
-    config: str,
-    output_dir: str,
-    run_name: str,
-    servers: str,
-) -> None:
-    """Run batch evaluation against multiple prompts."""
-    # Show banner unless disabled
-    if not ctx.obj.get("no_banner", False):
-        _show_banner()
-
-    debug = ctx.obj.get("debug", False)
-    asyncio.run(_run_batch(prompts_dir, config, output_dir, run_name, servers, debug))
-
-
-async def _run_batch(
-    prompts_dir: str,
-    config_path: str,
-    output_dir: str,
-    run_name: str,
-    servers_filter: str,
-    debug: bool = False,
-) -> None:
-    """Run batch evaluation asynchronously."""
-    mcp_manager = None
-
-    try:
-        # Load configuration
-        click.echo(f"Loading config from: {config_path}")
-        config = Config.from_yaml(Path(config_path))
-
-        # Filter servers if specified
-        if servers_filter:
-            server_names = [s.strip() for s in servers_filter.split(",")]
-            config.mcp_servers = [
-                s for s in config.mcp_servers if s.name in server_names
-            ]
-            click.echo(f"Filtering to servers: {server_names}")
-
-        # Find all prompt files
-        prompts_path = Path(prompts_dir)
-        prompt_files = list(prompts_path.glob("*.txt")) + list(
-            prompts_path.glob("*.md")
-        )
-
-        if not prompt_files:
-            raise click.ClickException(f"No prompt files found in {prompts_dir}")
-
-        click.echo(f"Found {len(prompt_files)} prompt files")
-
-        # Setup output directory
-        if output_dir:
-            output_path = Path(output_dir)
-            output_path.mkdir(parents=True, exist_ok=True)
-
-        # Initialize components once
-        llm_client = None
-        if config.evaluation.agent_type != "claude_code":
-            click.echo("Initializing LLM client...")
-            llm_client = LLMClient(config.llm)
-
-        click.echo("Initializing MCP client manager...")
-        mcp_manager = MCPClientManager()
-
-        # Connect to MCP servers (suppress server startup noise)
-        if config.evaluation.agent_type != "claude_code":
-            click.echo("Connecting to MCP servers...")
-            await _connect_mcp_servers_silently(mcp_manager, config.mcp_servers, debug)
-
-        # Initialize agent
-        agent = _create_agent(config, llm_client, mcp_manager)
-
-        # Run evaluations
-        results: list[dict[str, Any]] = []
-        for i, prompt_file in enumerate(prompt_files, 1):
-            click.echo(f"\n[{i}/{len(prompt_files)}] Evaluating: {prompt_file.name}")
-
-            try:
-                # Load prompt
-                with open(prompt_file) as f:
-                    prompt = f.read().strip()
-
-                # Run evaluation
-                start_time = time.time()
-                result = await agent.run(prompt)
-                end_time = time.time()
-
-                # Format result
-                result_data = {
-                    "prompt_file": str(prompt_file.name),
-                    "prompt": prompt,
-                    "result": {
-                        "success": result.success,
-                        "final_answer": result.final_answer,
-                        "steps": [step.model_dump() for step in result.steps],
-                        "total_iterations": result.total_iterations,
-                        "error": result.error,
-                        "execution_time_seconds": result.execution_time_seconds,
-                        "token_usage": result.token_usage,
-                    },
-                    "metadata": {
-                        "timestamp": time.time(),
-                        "duration_seconds": end_time - start_time,
-                    },
-                }
-
-                results.append(result_data)
-
-                # Write individual result if output directory specified
-                if output_dir:
-                    output_file = output_path / f"{prompt_file.stem}_result.json"
-                    with open(output_file, "w") as f:
-                        json.dump(result_data, f, indent=2)
-
-                status = "✅" if result.success else "❌"
-                click.echo(f"   {status} {result.execution_time_seconds:.2f}s")
-
-            except Exception as e:
-                click.echo(f"   ❌ Error: {e}")
-                results.append(
-                    {
-                        "prompt_file": str(prompt_file.name),
-                        "prompt": "",
-                        "result": {
-                            "success": False,
-                            "final_answer": "",
-                            "steps": [],
-                            "total_iterations": 0,
-                            "error": str(e),
-                            "execution_time_seconds": 0,
-                        },
-                        "metadata": {"timestamp": time.time(), "duration_seconds": 0},
-                    }
-                )
-
-        # Write summary results
-        summary = {
-            "config_file": config_path,
-            "prompts_directory": prompts_dir,
-            "total_prompts": len(prompt_files),
-            "successful": sum(
-                1 for r in results if bool(r.get("result", {}).get("success", False))
-            ),
-            "failed": sum(
-                1
-                for r in results
-                if not bool(r.get("result", {}).get("success", False))
-            ),
-            "results": results,
-            "metadata": {
-                "timestamp": time.time(),
-                "servers": [s.name for s in config.mcp_servers],
-            },
-        }
-
-        # Always generate output
-        base_dir = output_dir or "results"
-        output_manager = OutputManager(base_dir)
-
-        # Create run directory
-        batch_run_name = run_name or f"batch_{Path(prompts_dir).name}"
-        output_manager.create_run_directory(batch_run_name)
-
-        # Write batch results in all formats
-        output_files = output_manager.write_batch_results(summary, batch_run_name)
-
-        click.echo(f"\nBatch results written to: {output_manager.get_run_directory()}")
-        for format_type, file_path in output_files.items():
-            click.echo(f"  {format_type.upper()}: {file_path}")
-
-        # Print summary
-        click.echo(f"\n{'='*60}")
-        click.echo("BATCH EVALUATION SUMMARY")
-        click.echo(f"{'='*60}")
-        click.echo(f"Total prompts: {summary['total_prompts']}")
-        click.echo(f"Successful: {summary['successful']} ✅")
-        click.echo(f"Failed: {summary['failed']} ❌")
-        total_prompts = summary["total_prompts"]
-        successful = summary["successful"]
-        assert isinstance(total_prompts, int)
-        assert isinstance(successful, int)
-        success_rate = (successful / total_prompts * 100) if total_prompts > 0 else 0.0
-        click.echo(f"Success rate: {success_rate:.1f}%")
-
-    except Exception as e:
-        click.echo(f"❌ Batch evaluation failed: {e}")
-        raise click.ClickException(str(e)) from e
-
-    finally:
-        # Always clean up MCP connections
-        if mcp_manager is not None:
-            try:
-                logger = logging.getLogger(__name__)
-                logger.debug("Starting batch MCP cleanup...")
-                await asyncio.wait_for(mcp_manager.close(), timeout=5.0)
-                logger.debug("Batch MCP cleanup completed")
-            except TimeoutError:
-                logger = logging.getLogger(__name__)
-                logger.warning("Batch MCP cleanup timed out - forcing exit")
-            except Exception as cleanup_error:
-                logger = logging.getLogger(__name__)
-                logger.warning("Error during batch MCP cleanup: %s", cleanup_error)
-
-
-@main.command()
-@click.option("--baseline", required=True, help="Baseline server name")
-@click.option("--test", required=True, help="Test server name")
-@click.argument("prompts_dir", type=click.Path(exists=True))
-@click.option(
-    "--config",
-    "-c",
-    default="config/example-anthropic.yaml",
-    help="Configuration file path",
-)
-@click.option("--output-dir", help="Output directory for comparison results")
-@click.option("--run-name", help="Name for this comparison run")
-@click.pass_context
-def compare(
-    ctx: click.Context,
-    baseline: str,
-    test: str,
-    prompts_dir: str,
-    config: str,
-    output_dir: str,
-    run_name: str,
-) -> None:
-    """Compare performance between two MCP servers."""
-    # Show banner unless disabled
-    if not ctx.obj.get("no_banner", False):
-        _show_banner()
-
-    asyncio.run(_run_compare(baseline, test, prompts_dir, config, output_dir, run_name))
-
-
-@main.command()
-@click.option("--baseline-config", required=True, help="Baseline provider config file")
-@click.option("--test-config", required=True, help="Test provider config file")
-@click.argument("prompts_dir", type=click.Path(exists=True))
-@click.option("--output-dir", help="Output directory for comparison results")
-@click.option("--run-name", help="Name for this comparison run")
-@click.pass_context
-def compare_providers(
-    ctx: click.Context,
-    baseline_config: str,
-    test_config: str,
-    prompts_dir: str,
-    output_dir: str,
-    run_name: str,
-) -> None:
-    """Compare performance between different LLM providers."""
-    # Show banner unless disabled
-    if not ctx.obj.get("no_banner", False):
-        _show_banner()
-
-    asyncio.run(
-        _run_provider_compare(
-            baseline_config, test_config, prompts_dir, output_dir, run_name
-        )
-    )
-
-
-async def _run_provider_compare(
-    baseline_config_path: str,
-    test_config_path: str,
-    prompts_dir: str,
-    output_dir: str,
-    run_name: str,
-) -> None:
-    """Run provider comparison asynchronously."""
-    try:
-        # Load configurations
-        click.echo(f"Loading baseline config from: {baseline_config_path}")
-        baseline_config = Config.from_yaml(Path(baseline_config_path))
-
-        click.echo(f"Loading test config from: {test_config_path}")
-        test_config = Config.from_yaml(Path(test_config_path))
-
-        # Find all prompt files
-        prompts_path = Path(prompts_dir)
-        prompt_files = list(prompts_path.glob("*.txt")) + list(
-            prompts_path.glob("*.md")
-        )
-
-        if not prompt_files:
-            raise click.ClickException(f"No prompt files found in {prompts_dir}")
-
-        click.echo(f"Found {len(prompt_files)} prompt files")
-
-        baseline_provider = (
-            f"{baseline_config.llm.provider}:{baseline_config.llm.model}"
-        )
-        test_provider = f"{test_config.llm.provider}:{test_config.llm.model}"
-        click.echo(f"Comparing: {baseline_provider} vs {test_provider}")
-
-        # Run evaluations for both providers
-        comparison_results = []
-
-        for config_name, config in [
-            ("baseline", baseline_config),
-            ("test", test_config),
-        ]:
-            provider_name = f"{config.llm.provider}:{config.llm.model}"
-            click.echo(f"\n--- Running evaluations for {provider_name} ---")
-            mcp_manager = None
-
-            try:
-                # Initialize components
-                llm_client = None
-                if config.evaluation.agent_type != "claude_code":
-                    llm_client = LLMClient(config.llm)
-                mcp_manager = MCPClientManager()
-
-                # Connect to all MCP servers for this config
-                if config.evaluation.agent_type != "claude_code":
-                    for srv_cfg in config.mcp_servers:
-                        await mcp_manager.connect(srv_cfg)
-
-                agent = _create_agent(config, llm_client, mcp_manager)
-
-                # Run evaluations
-                provider_results = []
-                for i, prompt_file in enumerate(prompt_files, 1):
-                    click.echo(f"  [{i}/{len(prompt_files)}] {prompt_file.name}")
-
-                    try:
-                        # Load prompt
-                        with open(prompt_file) as f:
-                            prompt = f.read().strip()
-
-                        # Run evaluation
-                        result = await agent.run(prompt)
-
-                        provider_results.append(
-                            {
-                                "prompt_file": str(prompt_file.name),
-                                "prompt": prompt,
-                                "success": result.success,
-                                "final_answer": result.final_answer,
-                                "iterations": result.total_iterations,
-                                "execution_time": result.execution_time_seconds,
-                                "error": result.error,
-                                "steps": len(result.steps),
-                                "failed_tool_calls": result.failed_tool_calls,
-                                "token_usage": result.token_usage,
-                                "detailed_steps": [
-                                    step.model_dump() for step in result.steps
-                                ],
-                                "llm_responses": result.llm_responses,
-                            }
-                        )
-
-                        status = "✅" if result.success else "❌"
-                        click.echo(f"    {status} {result.execution_time_seconds:.2f}s")
-
-                    except Exception as e:
-                        click.echo(f"    ❌ Error: {e}")
-                        provider_results.append(
-                            {
-                                "prompt_file": str(prompt_file.name),
-                                "prompt": prompt,
-                                "success": False,
-                                "final_answer": "",
-                                "iterations": 0,
-                                "execution_time": 0.0,
-                                "error": str(e),
-                                "steps": 0,
-                                "failed_tool_calls": 0,
-                                "token_usage": None,
-                                "detailed_steps": [],
-                                "llm_responses": [],
-                            }
-                        )
-
-                comparison_results.append(
-                    {
-                        "provider": provider_name,
-                        "config_name": config_name,
-                        "results": provider_results,
-                    }
-                )
-
-            except Exception as e:
-                click.echo(f"❌ Provider {provider_name} failed: {e}")
-                # Add empty results for failed provider
-                comparison_results.append(
-                    {
-                        "provider": provider_name,
-                        "config_name": config_name,
-                        "results": [],
-                    }
-                )
-
-            finally:
-                # Clean up MCP connections
-                if mcp_manager is not None:
-                    try:
-                        await asyncio.wait_for(mcp_manager.close(), timeout=5.0)
-                    except Exception as cleanup_error:
-                        click.echo(f"Warning: MCP cleanup error: {cleanup_error}")
-
-        # Analyze results - handle cases where one or both providers failed
-        if len(comparison_results) >= 1:
-            # Ensure we have baseline and test results, even if empty
-            if len(comparison_results) == 1:
-                # Only one provider completed, create empty results for the other
-                completed_result = comparison_results[0]
-                if completed_result["config_name"] == "baseline":
-                    baseline_results: list = completed_result["results"]  # type: ignore[assignment]
-                    test_results: list = []
-                    baseline_provider_name: str = completed_result["provider"]  # type: ignore[assignment]
-                    test_provider_name: str = (
-                        f"{test_config.llm.provider}:{test_config.llm.model}"
-                    )
-                else:
-                    baseline_results = []
-                    test_results = completed_result["results"]  # type: ignore[assignment]
-                    baseline_provider_name = (
-                        f"{baseline_config.llm.provider}:{baseline_config.llm.model}"
-                    )
-                    test_provider_name = completed_result["provider"]  # type: ignore[assignment]
-            else:
-                # Both providers attempted (may have failed)
-                baseline_results = comparison_results[0]["results"]  # type: ignore[index,assignment]
-                test_results = comparison_results[1]["results"]  # type: ignore[index,assignment]
-                baseline_provider_name = comparison_results[0]["provider"]  # type: ignore[index,assignment]
-                test_provider_name = comparison_results[1]["provider"]  # type: ignore[index,assignment]
-
-            # Analyze comparison (handles empty results gracefully)
-            analysis = _analyze_comparison(
-                baseline_provider_name, test_provider_name, baseline_results, test_results  # type: ignore[arg-type]
-            )
-
-            # Generate output
-            base_dir = output_dir or "results"
-            output_manager = OutputManager(base_dir)
-
-            # Create run directory
-            comparison_run_name = (
-                run_name
-                or f"provider_comparison_{baseline_config.llm.provider}_vs_{test_config.llm.provider}"
-            )
-            output_manager.create_run_directory(comparison_run_name)
-
-            # Prepare comparison data with failure information
-            comparison_data = {
-                "baseline_server": baseline_provider_name,  # Match results.py expectations
-                "test_server": test_provider_name,  # Match results.py expectations
-                "baseline_config": baseline_config_path,
-                "test_config": test_config_path,
-                "analysis": analysis,
-                "detailed_results": {
-                    baseline_provider_name: baseline_results,
-                    test_provider_name: test_results,
-                },
-                "provider_failures": {
-                    "baseline_failed": len(baseline_results) == 0
-                    and len(comparison_results) >= 2,
-                    "test_failed": len(test_results) == 0
-                    and len(comparison_results) >= 2,
-                },
-                "timestamp": time.time(),
-            }
-
-            # Write comparison results
-            output_files = output_manager.write_comparison_results(
-                comparison_data, comparison_run_name
-            )
-
+            output_path = _generate_output_path(prompt_file, output_format)
+
+        # Write output to file
+        try:
+            output_path.write_text(formatted_output, encoding="utf-8")
+            click.echo(f"💾 Results saved to: {output_path}")
+        except Exception as e:
+            click.echo(f"Error writing output: {e}", err=True)
+            sys.exit(1)
+
+        # Show summary
+        if verbose:
+            click.echo()
+            status = "✅ Success" if result.success else "❌ Failed"
             click.echo(
-                f"\nComparison results written to: {output_manager.get_run_directory()}"
-            )
-            for format_type, file_path in output_files.items():
-                click.echo(f"  {format_type.upper()}: {file_path}")
-
-            # Print summary with failure information
-            if len(baseline_results) == 0:
-                click.echo(
-                    f"\n⚠️  Baseline provider ({baseline_provider_name}) failed completely"
-                )
-            if len(test_results) == 0:
-                click.echo(
-                    f"\n⚠️  Test provider ({test_provider_name}) failed completely"
-                )
-
-            _print_comparison_summary(analysis)
-
-        else:
-            click.echo(
-                "❌ Could not complete comparison - no results from either provider"
+                f"{status} - {result.total_iterations} steps - {result.execution_time_seconds:.2f}s"
             )
 
-    except Exception as e:
-        click.echo(f"❌ Provider comparison failed: {e}")
-        raise click.ClickException(str(e)) from e
-
-
-async def _run_compare(
-    baseline: str,
-    test: str,
-    prompts_dir: str,
-    config_path: str,
-    output_dir: str,
-    run_name: str,
-) -> None:
-    """Run comparison asynchronously."""
-    try:
-        # Load configuration
-        click.echo(f"Loading config from: {config_path}")
-        config = Config.from_yaml(Path(config_path))
-
-        # Validate servers exist in config
-        server_names = [s.name for s in config.mcp_servers]
-        if baseline not in server_names:
-            raise click.ClickException(
-                f"Baseline server '{baseline}' not found in config"
-            )
-        if test not in server_names:
-            raise click.ClickException(f"Test server '{test}' not found in config")
-
-        # Find all prompt files
-        prompts_path = Path(prompts_dir)
-        prompt_files = list(prompts_path.glob("*.txt")) + list(
-            prompts_path.glob("*.md")
-        )
-
-        if not prompt_files:
-            raise click.ClickException(f"No prompt files found in {prompts_dir}")
-
-        click.echo(f"Found {len(prompt_files)} prompt files")
-        click.echo(f"Comparing: {baseline} vs {test}")
-
-        # Run evaluations for both servers
-        comparison_results = []
-
-        for server_name in [baseline, test]:
-            click.echo(f"\n--- Running evaluations for {server_name} ---")
-            mcp_manager = None
-
-            try:
-                # Filter config to only this server
-                server_config = Config(
-                    mcp_servers=[
-                        s for s in config.mcp_servers if s.name == server_name
-                    ],
-                    llm=config.llm,
-                    evaluation=config.evaluation,
-                )
-
-                # Initialize components
-                llm_client = None
-                if server_config.evaluation.agent_type != "claude_code":
-                    llm_client = LLMClient(server_config.llm)
-                mcp_manager = MCPClientManager()
-
-                # Connect to MCP server
-                if server_config.evaluation.agent_type != "claude_code":
-                    for srv_cfg in server_config.mcp_servers:
-                        await mcp_manager.connect(srv_cfg)
-
-                agent = _create_agent(server_config, llm_client, mcp_manager)
-
-                # Run evaluations
-                server_results = []
-                for i, prompt_file in enumerate(prompt_files, 1):
-                    click.echo(f"  [{i}/{len(prompt_files)}] {prompt_file.name}")
-
-                    try:
-                        # Load prompt
-                        with open(prompt_file) as f:
-                            prompt = f.read().strip()
-
-                        # Run evaluation
-                        result = await agent.run(prompt)
-
-                        server_results.append(
-                            {
-                                "prompt_file": str(prompt_file.name),
-                                "prompt": prompt,
-                                "success": result.success,
-                                "final_answer": result.final_answer,
-                                "iterations": result.total_iterations,
-                                "execution_time": result.execution_time_seconds,
-                                "error": result.error,
-                                "steps": len(result.steps),
-                                "failed_tool_calls": result.failed_tool_calls,
-                                "token_usage": result.token_usage,
-                                "detailed_steps": [
-                                    step.model_dump() for step in result.steps
-                                ],
-                                "llm_responses": result.llm_responses,
-                            }
-                        )
-
-                        status = "✅" if result.success else "❌"
-                        click.echo(f"    {status} {result.execution_time_seconds:.2f}s")
-
-                    except Exception as e:
-                        click.echo(f"    ❌ Error: {e}")
-                        server_results.append(
-                            {
-                                "prompt_file": str(prompt_file.name),
-                                "prompt": "",
-                                "success": False,
-                                "final_answer": "",
-                                "iterations": 0,
-                                "execution_time": 0,
-                                "error": str(e),
-                                "steps": 0,
-                                "failed_tool_calls": 0,
-                                "token_usage": None,
-                                "detailed_steps": [],
-                                "llm_responses": [],
-                            }
-                        )
-
-                comparison_results.append(
-                    {"server_name": server_name, "results": server_results}
-                )
-
-            finally:
-                # Always clean up MCP connections for this server
-                if mcp_manager is not None:
-                    try:
-                        logger = logging.getLogger(__name__)
-                        logger.debug(
-                            "Starting compare MCP cleanup for %s...", server_name
-                        )
-                        await asyncio.wait_for(mcp_manager.close(), timeout=5.0)
-                        logger.debug(
-                            "Compare MCP cleanup completed for %s", server_name
-                        )
-                    except TimeoutError:
-                        logger = logging.getLogger(__name__)
-                        logger.warning(
-                            "Compare MCP cleanup timed out for %s - forcing exit",
-                            server_name,
-                        )
-                    except Exception as cleanup_error:
-                        logger = logging.getLogger(__name__)
-                        logger.warning(
-                            "Error during MCP cleanup for %s: %s",
-                            server_name,
-                            cleanup_error,
-                        )
-
-        # Generate comparison analysis
-        baseline_results = comparison_results[0]["results"]
-        test_results = comparison_results[1]["results"]
-
-        analysis = _analyze_comparison(baseline, test, baseline_results, test_results)  # type: ignore[arg-type]
-
-        # Create final comparison data
-        comparison_data = {
-            "baseline_server": baseline,
-            "test_server": test,
-            "prompts_directory": prompts_dir,
-            "config_file": config_path,
-            "analysis": analysis,
-            "detailed_results": {baseline: baseline_results, test: test_results},
-            "metadata": {"timestamp": time.time(), "total_prompts": len(prompt_files)},
-        }
-
-        # Output results using OutputManager
-        base_dir = output_dir or "results"
-        output_manager = OutputManager(base_dir)
-
-        # Create run directory
-        comparison_run_name = run_name or f"compare_{baseline}_vs_{test}"
-        output_manager.create_run_directory(comparison_run_name)
-
-        # Write comparison results in all formats
-        output_files = output_manager.write_comparison_results(
-            comparison_data, comparison_run_name
-        )
-
-        click.echo(
-            f"\nComparison results written to: {output_manager.get_run_directory()}"
-        )
-        for format_type, file_path in output_files.items():
-            click.echo(f"  {format_type.upper()}: {file_path}")
-
-        # Print comparison summary
-        _print_comparison_summary(analysis)
-
-    except Exception as e:
-        click.echo(f"❌ Comparison failed: {e}")
-        raise click.ClickException(str(e)) from e
-
-
-def _analyze_comparison(
-    baseline: str, test: str, baseline_results: list, test_results: list
-) -> dict:
-    """Analyze comparison between two servers."""
-    baseline_success = sum(1 for r in baseline_results if r.get("success", False))
-    test_success = sum(1 for r in test_results if r.get("success", False))
-    # Use max of both result lengths to handle cases where one provider failed completely
-    total = max(len(baseline_results), len(test_results), 1)
-
-    baseline_avg_time = sum(
-        r.get("execution_time", 0) for r in baseline_results if r.get("success", False)
-    ) / max(baseline_success, 1)
-    test_avg_time = sum(
-        r.get("execution_time", 0) for r in test_results if r.get("success", False)
-    ) / max(test_success, 1)
-
-    baseline_avg_iterations = sum(
-        r.get("iterations", 0) for r in baseline_results if r.get("success", False)
-    ) / max(baseline_success, 1)
-    test_avg_iterations = sum(
-        r.get("iterations", 0) for r in test_results if r.get("success", False)
-    ) / max(test_success, 1)
-
-    # Calculate failed tool calls
-    baseline_failed_tools = sum(r.get("failed_tool_calls", 0) for r in baseline_results)
-    test_failed_tools = sum(r.get("failed_tool_calls", 0) for r in test_results)
-
-    # Calculate token usage
-    baseline_total_tokens = 0
-    test_total_tokens = 0
-
-    for r in baseline_results:
-        if r.get("token_usage"):
-            baseline_total_tokens += r["token_usage"].get("total_tokens", 0)
-
-    for r in test_results:
-        if r.get("token_usage"):
-            test_total_tokens += r["token_usage"].get("total_tokens", 0)
-
-    return {
-        "total_prompts": total,
-        "success_rates": {
-            baseline: baseline_success / total,
-            test: test_success / total,
-        },
-        "success_counts": {baseline: baseline_success, test: test_success},
-        "average_execution_times": {baseline: baseline_avg_time, test: test_avg_time},
-        "average_iterations": {
-            baseline: baseline_avg_iterations,
-            test: test_avg_iterations,
-        },
-        "total_failed_tool_calls": {
-            baseline: baseline_failed_tools,
-            test: test_failed_tools,
-        },
-        "total_token_usage": {baseline: baseline_total_tokens, test: test_total_tokens},
-        "winner": {
-            "success_rate": (
-                "tie"
-                if baseline_success == test_success
-                else baseline if baseline_success > test_success else test
-            ),
-            "speed": (
-                "tie"
-                if baseline_success == 0 and test_success == 0
-                else (
-                    "tie"
-                    if baseline_success > 0
-                    and test_success > 0
-                    and abs(baseline_avg_time - test_avg_time) < 0.1
-                    else (
-                        baseline
-                        if test_success == 0
-                        or (baseline_success > 0 and baseline_avg_time <= test_avg_time)
-                        else test
-                    )
-                )
-            ),
-            "efficiency": (
-                "tie"
-                if baseline_success == 0 and test_success == 0
-                else (
-                    "tie"
-                    if baseline_success > 0
-                    and test_success > 0
-                    and baseline_avg_iterations == test_avg_iterations
-                    else (
-                        baseline
-                        if test_success == 0
-                        or (
-                            baseline_success > 0
-                            and baseline_avg_iterations <= test_avg_iterations
-                        )
-                        else test
-                    )
-                )
-            ),
-            "reliability": (
-                "tie"
-                if len(baseline_results) == 0 and len(test_results) == 0
-                else (
-                    "tie"
-                    if len(baseline_results) > 0
-                    and len(test_results) > 0
-                    and baseline_failed_tools == test_failed_tools
-                    else (
-                        baseline
-                        if len(test_results) == 0
-                        or (
-                            len(baseline_results) > 0
-                            and baseline_failed_tools <= test_failed_tools
-                        )
-                        else test
-                    )
-                )
-            ),
-            "token_efficiency": (
-                "tie"
-                if (baseline_total_tokens or 0) == (test_total_tokens or 0)
-                else (
-                    baseline
-                    if (baseline_total_tokens or 0) < (test_total_tokens or 0)
-                    else test
-                )
-            ),
-        },
-    }
-
-
-def _print_comparison_summary(analysis: dict) -> None:
-    """Print comparison summary to console."""
-    baseline = list(analysis["success_rates"].keys())[0]
-    test = list(analysis["success_rates"].keys())[1]
-
-    click.echo(f"\n{'='*70}")
-    click.echo("🏆 COMPARISON SUMMARY")
-    click.echo(f"{'='*70}")
-
-    click.echo(f"📊 Total prompts: {analysis['total_prompts']}")
-    click.echo()
-
-    # Success rates
-    click.echo("✅ SUCCESS RATES:")
-    baseline_rate = analysis["success_rates"][baseline] * 100
-    test_rate = analysis["success_rates"][test] * 100
-    click.echo(
-        f"  {baseline}: {analysis['success_counts'][baseline]}/{analysis['total_prompts']} ({baseline_rate:.1f}%)"
-    )
-    click.echo(
-        f"  {test}: {analysis['success_counts'][test]}/{analysis['total_prompts']} ({test_rate:.1f}%)"
-    )
-    click.echo(f"  🏆 Winner: {analysis['winner']['success_rate']}")
-    click.echo()
-
-    # Speed
-    click.echo("⚡ AVERAGE EXECUTION TIME:")
-    baseline_time = analysis["average_execution_times"][baseline]
-    test_time = analysis["average_execution_times"][test]
-    click.echo(f"  {baseline}: {baseline_time:.2f}s")
-    click.echo(f"  {test}: {test_time:.2f}s")
-    click.echo(f"  🏆 Winner: {analysis['winner']['speed']}")
-    click.echo()
-
-    # Efficiency
-    click.echo("🎯 AVERAGE ITERATIONS:")
-    baseline_iter = analysis["average_iterations"][baseline]
-    test_iter = analysis["average_iterations"][test]
-    click.echo(f"  {baseline}: {baseline_iter:.1f}")
-    click.echo(f"  {test}: {test_iter:.1f}")
-    click.echo(f"  🏆 Winner: {analysis['winner']['efficiency']}")
-    click.echo()
-
-    # Reliability (Failed Tool Calls)
-    click.echo("🔒 RELIABILITY (Failed Tool Calls):")
-    baseline_failed = analysis["total_failed_tool_calls"][baseline]
-    test_failed = analysis["total_failed_tool_calls"][test]
-    click.echo(f"  {baseline}: {baseline_failed}")
-    click.echo(f"  {test}: {test_failed}")
-    click.echo(f"  🏆 Winner: {analysis['winner']['reliability']}")
-    click.echo()
-
-    # Token efficiency
-    click.echo("💎 TOKEN EFFICIENCY:")
-    baseline_tokens = analysis["total_token_usage"][baseline]
-    test_tokens = analysis["total_token_usage"][test]
-    if (baseline_tokens and baseline_tokens > 0) or (test_tokens and test_tokens > 0):
-        click.echo(
-            f"  {baseline}: {baseline_tokens:,} tokens"
-            if baseline_tokens
-            else f"  {baseline}: N/A"
-        )
-        click.echo(
-            f"  {test}: {test_tokens:,} tokens" if test_tokens else f"  {test}: N/A"
-        )
-        click.echo(f"  🏆 Winner: {analysis['winner']['token_efficiency']}")
-    else:
-        click.echo("  No token usage data available")
-    click.echo(f"{'='*70}")
+    # Run the async evaluation
+    asyncio.run(run_evaluation())
 
 
 if __name__ == "__main__":
-    main()
+    cli()

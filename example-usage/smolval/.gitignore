@@ -1,0 +1,9 @@
+# Environment variables (contains sensitive API keys)
+.env
+
+# Evaluation results (typically large and not needed in git)
+results/
+
+# Temporary files
+*.tmp
+*.log

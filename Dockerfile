@@ -1,12 +1,16 @@
 FROM python:3.11-slim
 
-# Install system dependencies, Node.js 22.16.x, and Docker
+# Install system dependencies, Node.js 22.16.x, Docker, and development tools
 RUN apt-get update && apt-get install -y \
     curl \
     xz-utils \
     ca-certificates \
     gnupg \
     lsb-release \
+    git \
+    vim \
+    tree \
+    jq \
     && NODE_VERSION=22.16.0 \
     && ARCH=$(dpkg --print-architecture) \
     && if [ "$ARCH" = "amd64" ]; then NODE_ARCH="x64"; elif [ "$ARCH" = "arm64" ]; then NODE_ARCH="arm64"; else echo "Unsupported architecture: $ARCH" && exit 1; fi \
@@ -18,13 +22,22 @@ RUN apt-get update && apt-get install -y \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
-# Install uv
+# Install uv (uvx is included)
 RUN pip install --no-cache-dir uv
 
-# Install common MCP servers globally for faster startup
+# Install Claude Code CLI and common MCP servers globally for faster startup
 RUN npm install -g \
+    @anthropic-ai/claude-code \
     @modelcontextprotocol/server-filesystem \
     @modelcontextprotocol/server-memory
+
+# Configure Claude CLI environment and verify installation
+ENV CLAUDE_CONFIG_DIR=/app/.claude
+RUN mkdir -p $CLAUDE_CONFIG_DIR \
+    && claude --version
+
+# Create workspace directory for user-mounted content
+RUN mkdir -p /workspace
 
 # Set working directory
 WORKDIR /app
@@ -35,12 +48,13 @@ COPY README.md ./
 COPY uv.lock ./
 COPY src/ ./src/
 
-# Install dependencies
-RUN uv sync --frozen --no-dev
+# Install dependencies and build smolval
+RUN uv sync --frozen --no-dev && \
+    uv build && \
+    uv pip install --system dist/*.whl
 
-# Copy additional runtime files
-COPY config/ ./config/
-COPY prompts/ ./prompts/
+# Note: Users should mount their workspace with -v $(pwd):/workspace
+# Example prompts and configs are available in the source repository
 
 # Set Python path
 ENV PYTHONPATH=/app/src
@@ -52,9 +66,16 @@ RUN useradd --create-home --shell /bin/bash smolval && \
 # Pre-pull MCP Docker images for faster startup (optional, requires Docker socket)
 # RUN docker pull mcp/sqlite || true
 
-# Note: For Docker-in-Docker to work properly, the container may need to run as root
-# or with the correct user/group IDs. See CLAUDE.md for usage instructions.
+# Add user to docker group for Docker-in-Docker support
+RUN usermod -a -G docker smolval 2>/dev/null || true
+
+# Switch to non-root user for security
 USER smolval
 
-# Set entrypoint
-ENTRYPOINT ["uv", "run", "smolval"]
+# Usage:
+# Basic: docker run --rm -v $(pwd):/workspace -e ANTHROPIC_API_KEY smolval eval /workspace/prompts/test.txt
+# With Docker MCP servers: docker run --rm -v $(pwd):/workspace -v /var/run/docker.sock:/var/run/docker.sock -e ANTHROPIC_API_KEY smolval eval /workspace/prompts/test.txt
+# MCP configuration: Use .mcp.json files in your workspace, no config directory needed
+
+# Set entrypoint to use the installed smolval command
+ENTRYPOINT ["smolval"]

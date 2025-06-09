@@ -23,62 +23,77 @@ This directory contains example prompts and configurations to help you get start
 
 ### Development Configurations
 
-- **[config-basic.yaml](config-basic.yaml)** - Simple setup for development and testing
-  - Filesystem server (current directory)
-  - Web fetch server
-  - Anthropic Claude with basic settings
+- **[development-config.yaml](development-config.yaml)** - Simple setup for development and testing (legacy format)
+- **Basic MCP Setup** - Claude Code includes filesystem and web fetch capabilities built-in
 
-### Comparison Configurations
+### Database Configurations  
 
-- **[config-comparison.yaml](config-comparison.yaml)** - Setup for comparing different server implementations
-  - Multiple filesystem servers with different configurations
-  - Multiple fetch servers with optimization settings
-  - Deterministic LLM settings for fair comparison
+- **[postgres/postgres-comparison.yaml](postgres/postgres-comparison.yaml)** - PostgreSQL database access via MCP
+- **Standard `.mcp.json`** - Uses standard MCP configuration format
 
 ### Production Configurations
 
-- **[config-production.yaml](config-production.yaml)** - Production-ready setup with security and performance optimizations
-  - Restricted filesystem access
-  - Production-grade web fetch limits
-  - Database servers (PostgreSQL, SQLite)
-  - Robust error handling and timeouts
+- **[production-config.yaml](production-config.yaml)** - Production-ready setup (legacy format)
+- **Docker MCP Servers** - Containerized MCP servers for production isolation
 
 ## Quick Start
 
-### 1. Basic File Operations Test
+### 1. Basic File Operations Test (No MCP Config Needed)
 
 ```bash
-# Copy the basic config to your project
-cp docs/examples/config-basic.yaml config/my-config.yaml
-
-# Run the basic file operations test
-uv run smolval eval docs/examples/basic-file-operations.txt -c config/my-config.yaml
+# Test basic filesystem operations (built into Claude Code)
+docker run --rm \
+  -v $(pwd):/workspace \
+  -e ANTHROPIC_API_KEY \
+  ghcr.io/austinlparker/smolval \
+  eval /workspace/docs/examples/basic-file-operations.txt
 ```
 
-### 2. Web Content Analysis
+### 2. Web Content Analysis (No MCP Config Needed)
 
 ```bash
-# Test web fetching capabilities
-uv run smolval eval docs/examples/web-content-analysis.txt -c config/my-config.yaml
+# Test web fetching capabilities (built into Claude Code)
+docker run --rm \
+  -v $(pwd):/workspace \
+  -e ANTHROPIC_API_KEY \
+  ghcr.io/austinlparker/smolval \
+  eval /workspace/docs/examples/web-content-analysis.txt --format html
 ```
 
-### 3. Performance Benchmark
+### 3. Database Operations (Requires MCP Config)
 
 ```bash
-# Run performance tests
-uv run smolval eval docs/examples/performance-benchmark.txt -c config/my-config.yaml --format html
+# Create .mcp.json for database access
+cat > .mcp.json << 'EOF'
+{
+  "mcpServers": {
+    "sqlite": {
+      "command": "docker",
+      "args": ["run", "--rm", "-i", "mcp/sqlite"],
+      "env": {}
+    }
+  }
+}
+EOF
+
+# Test database operations with MCP server
+docker run --rm \
+  -v $(pwd):/workspace \
+  -v /var/run/docker.sock:/var/run/docker.sock \
+  -e ANTHROPIC_API_KEY \
+  ghcr.io/austinlparker/smolval \
+  eval /workspace/docs/examples/database-operations.txt --mcp-config /workspace/.mcp.json
 ```
 
-### 4. Server Comparison
+### 4. Performance Benchmark
 
 ```bash
-# Compare two filesystem implementations
-uv run smolval compare \
-  --baseline filesystem-v1 \
-  --test filesystem-v2 \
-  docs/examples/ \
-  -c docs/examples/config-comparison.yaml \
-  --format html
+# Run comprehensive performance tests
+docker run --rm \
+  -v $(pwd):/workspace \
+  -e ANTHROPIC_API_KEY \
+  ghcr.io/austinlparker/smolval \
+  eval /workspace/docs/examples/performance-benchmark.txt --format html --timeout 600
 ```
 
 ## Customizing Examples
@@ -90,25 +105,52 @@ All prompt files can be customized for your specific use case:
 1. **Copy the example**: `cp docs/examples/basic-file-operations.txt prompts/my-test.txt`
 2. **Edit the tasks**: Modify the numbered steps to match your requirements
 3. **Update success criteria**: Adjust the performance and correctness expectations
-4. **Run your test**: `uv run smolval eval prompts/my-test.txt`
+4. **Run your test**: 
+   ```bash
+   docker run --rm \
+     -v $(pwd):/workspace \
+     -e ANTHROPIC_API_KEY \
+     ghcr.io/austinlparker/smolval \
+     eval /workspace/prompts/my-test.txt
+   ```
 
-### Adapting Configurations
+### Adapting MCP Configurations
 
-Example configurations can be adapted for different environments:
+Example `.mcp.json` configurations for different environments:
 
-```yaml
-# Development - fast and permissive
-evaluation:
-  timeout_seconds: 60
-  max_iterations: 10
-  retry_attempts: 1
+```json
+// Development - simple setup
+{
+  "mcpServers": {
+    "sqlite": {
+      "command": "docker",
+      "args": ["run", "--rm", "-i", "mcp/sqlite"],
+      "env": {}
+    }
+  }
+}
+```
 
-# Production - robust and secure
-evaluation:
-  timeout_seconds: 300
-  max_iterations: 25
-  retry_attempts: 3
-  retry_delay: 2.0
+```json
+// Production - multiple servers
+{
+  "mcpServers": {
+    "database": {
+      "command": "docker",
+      "args": ["run", "--rm", "-i", "mcp/postgres"],
+      "env": {
+        "POSTGRES_CONNECTION_STRING": "postgresql://user:pass@host:5432/db"
+      }
+    },
+    "github": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-github"],
+      "env": {
+        "GITHUB_PERSONAL_ACCESS_TOKEN": "${GITHUB_TOKEN}"
+      }
+    }
+  }
+}
 ```
 
 ## Environment-Specific Examples
@@ -119,31 +161,39 @@ evaluation:
 # Set up environment
 export ANTHROPIC_API_KEY="your-key-here"
 
-# Run basic tests
-uv run smolval batch docs/examples/ -c docs/examples/config-basic.yaml
+# Run basic tests (no MCP servers needed)
+docker run --rm \
+  -v $(pwd):/workspace \
+  -e ANTHROPIC_API_KEY \
+  ghcr.io/austinlparker/smolval \
+  eval /workspace/docs/examples/basic-file-operations.txt
 ```
 
 ### CI/CD Pipeline
 
 ```bash
 # Use in continuous integration
-uv run smolval batch docs/examples/ \
-  -c docs/examples/config-production.yaml \
-  --output-dir ci-results/ \
-  --run-name "ci-${BUILD_NUMBER}"
+docker run --rm \
+  -v $(pwd):/workspace \
+  -v /var/run/docker.sock:/var/run/docker.sock \
+  -e ANTHROPIC_API_KEY \
+  ghcr.io/austinlparker/smolval \
+  eval /workspace/docs/examples/performance-benchmark.txt \
+  --format json --output ci-results-${BUILD_NUMBER}.json
 ```
 
-### Docker Environment
+### Batch Testing Multiple Prompts
 
 ```bash
-# Run in containerized environment
-docker run --rm \
-  -v $(pwd)/docs/examples:/examples \
-  -v $(pwd)/results:/results \
-  -e ANTHROPIC_API_KEY \
-  smolval batch /examples/ \
-  -c /examples/config-basic.yaml \
-  --output-dir /results
+# Test multiple prompts in sequence
+for prompt in docs/examples/*.txt; do
+  echo "Testing $prompt..."
+  docker run --rm \
+    -v $(pwd):/workspace \
+    -e ANTHROPIC_API_KEY \
+    ghcr.io/austinlparker/smolval \
+    eval "/workspace/$prompt" --format json
+done
 ```
 
 ## Creating Your Own Examples
@@ -164,36 +214,46 @@ Success criteria:
 - [Error handling requirement]
 ```
 
-### Configuration Template
+### MCP Configuration Template
 
-```yaml
-mcp_servers:
-  - name: "descriptive-name"
-    command: ["executable", "args"]
-    env:
-      KEY: "value"
-
-llm:
-  provider: "anthropic"  # or "openai", "ollama"
-  model: "claude-3-5-sonnet-20241022"
-  api_key: "${API_KEY}"
-  temperature: 0.1
-
-evaluation:
-  timeout_seconds: 120
-  max_iterations: 15
-  output_format: "markdown"
+```json
+{
+  "mcpServers": {
+    "descriptive-name": {
+      "command": "executable",
+      "args": ["arg1", "arg2"],
+      "env": {
+        "KEY": "value"
+      }
+    },
+    "database": {
+      "command": "docker",
+      "args": ["run", "--rm", "-i", "mcp/sqlite"],
+      "env": {}
+    },
+    "api-server": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-github"],
+      "env": {
+        "GITHUB_PERSONAL_ACCESS_TOKEN": "${GITHUB_TOKEN}"
+      }
+    }
+  }
+}
 ```
+
+**Note**: Claude Code handles the LLM configuration automatically using your `ANTHROPIC_API_KEY`. Timeout and output format are controlled via command-line flags.
 
 ## Troubleshooting Examples
 
 If examples don't work as expected:
 
-1. **Check dependencies**: Ensure MCP servers are installed
-2. **Verify API keys**: Check environment variables
-3. **Run with debug**: Use `--debug` flag for detailed logs
-4. **Check file paths**: Ensure prompt files and configs exist
-5. **Review server logs**: Look for MCP server startup issues
+1. **Check API key**: Ensure `ANTHROPIC_API_KEY` is set correctly
+2. **Verify file paths**: Ensure prompt files exist in `/workspace/` within container
+3. **Run with verbose mode**: Use `--verbose` flag for detailed logs
+4. **Check Docker setup**: Ensure Docker daemon is running for MCP servers
+5. **Test without MCP**: Try basic examples first (filesystem and web fetch work without MCP)
+6. **Check MCP config**: Validate `.mcp.json` syntax with `python3 -m json.tool .mcp.json`
 
 ## Contributing Examples
 
