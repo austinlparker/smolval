@@ -153,7 +153,7 @@ class ClaudeCodeAgent:
                     if os.path.getsize(mcp_config_abs_path) > 0:
                         import json
 
-                        with open(mcp_config_abs_path, "r") as f:
+                        with open(mcp_config_abs_path) as f:
                             json.load(f)  # Validate JSON
 
                         # File is valid, use it
