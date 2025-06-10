@@ -21,7 +21,7 @@ class ClaudeCodeAgent:
     def __init__(
         self,
         mcp_config_path: str | None = None,
-        timeout_seconds: int = 300,
+        timeout_seconds: int = 900,
         verbose: bool = False,
         env_file: str | None = None,
         isolate_mcp_config: bool = False,

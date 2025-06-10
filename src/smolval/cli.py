@@ -95,7 +95,7 @@ def cli(debug: bool, no_banner: bool) -> None:
 @click.option(
     "--timeout",
     type=int,
-    default=300,
+    default=900,
     show_default=True,
     help="Maximum time in seconds to wait for Claude Code execution. Use 0 for no timeout.",
 )
@@ -168,7 +168,7 @@ def eval(
       smolval eval prompts/analysis.txt --format json
 
       # Verbose mode for debugging or detailed monitoring
-      smolval eval prompts/complex-task.txt --verbose --timeout 600
+      smolval eval prompts/complex-task.txt --verbose --timeout 1800
 
       # Custom output location
       smolval eval prompts/batch-task.txt --format csv --output batch-results.csv
