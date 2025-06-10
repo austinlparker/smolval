@@ -140,8 +140,8 @@ class ClaudeCodeAgent:
 
             # Add allowed tools for evaluation scenarios
             allowed_tools_arg = self._build_allowed_tools_arg()
-            cmd.extend(["--allowed-tools", allowed_tools_arg])
-            logger.debug(f"Added --allowed-tools flag: {allowed_tools_arg}")
+            cmd.extend(["--allowedTools", allowed_tools_arg])
+            logger.debug(f"Added --allowedTools flag: {allowed_tools_arg}")
 
             # Handle MCP config path - validate file exists and is valid JSON
             mcp_config_abs_path = os.path.abspath(self.mcp_config_path)
