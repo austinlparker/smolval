@@ -25,6 +25,7 @@ class ClaudeCodeAgent:
         verbose: bool = False,
         env_file: str | None = None,
         isolate_mcp_config: bool = False,
+        allowed_mcp_tools: str | None = None,
     ) -> None:
         """Initialize the Claude Code agent."""
         self.mcp_config_path = mcp_config_path or ".mcp.json"
@@ -32,6 +33,7 @@ class ClaudeCodeAgent:
         self.verbose = verbose
         self.env_file = env_file
         self.isolate_mcp_config = isolate_mcp_config
+        self.allowed_mcp_tools = allowed_mcp_tools
 
         # Load environment variables from .env file
         env_file_path = env_file or ".env"
@@ -41,6 +43,35 @@ class ClaudeCodeAgent:
         else:
             load_dotenv()  # Try default behavior
             logger.debug("Loaded environment using default .env discovery")
+
+    def _build_allowed_tools_arg(self) -> str:
+        """Build the --allowed-tools argument with built-in tools and optional MCP tools."""
+        # Built-in tools that require permissions
+        builtin_tools = [
+            "Bash",
+            "Edit",
+            "MultiEdit",
+            "NotebookEdit",
+            "WebFetch",
+            "WebSearch",
+            "Write",
+        ]
+
+        # Start with built-in tools
+        allowed_tools = builtin_tools[:]
+
+        # Add MCP tools if provided
+        if self.allowed_mcp_tools:
+            # Split by comma and clean up whitespace
+            mcp_tools = [
+                tool.strip()
+                for tool in self.allowed_mcp_tools.split(",")
+                if tool.strip()
+            ]
+            allowed_tools.extend(mcp_tools)
+
+        # Join with commas for the CLI argument
+        return ",".join(allowed_tools)
 
     async def run(self, prompt: str, show_progress: bool = True) -> AgentResult:
         """Run the agent on a given prompt using Claude Code CLI."""
@@ -107,32 +138,42 @@ class ClaudeCodeAgent:
                 "--verbose",  # Required for stream-json output
             ]
 
-            # Always skip permissions for evaluation scenarios
-            cmd.append("--dangerously-skip-permissions")
-            logger.debug("Added --dangerously-skip-permissions flag for evaluation")
+            # Add allowed tools for evaluation scenarios
+            allowed_tools_arg = self._build_allowed_tools_arg()
+            cmd.extend(["--allowed-tools", allowed_tools_arg])
+            logger.debug(f"Added --allowed-tools flag: {allowed_tools_arg}")
 
             # Handle MCP config path - validate file exists and is valid JSON
             mcp_config_abs_path = os.path.abspath(self.mcp_config_path)
             config_dir = os.getcwd()
-            
+
             if os.path.exists(mcp_config_abs_path):
                 # Check if file is not empty and is valid JSON
                 try:
                     if os.path.getsize(mcp_config_abs_path) > 0:
                         import json
-                        with open(mcp_config_abs_path, 'r') as f:
+
+                        with open(mcp_config_abs_path, "r") as f:
                             json.load(f)  # Validate JSON
-                        
+
                         # File is valid, use it
                         config_dir = os.path.dirname(mcp_config_abs_path)
                         cmd.extend(["--mcp-config", mcp_config_abs_path])
-                        logger.debug(f"Added explicit MCP config: {mcp_config_abs_path}")
+                        logger.debug(
+                            f"Added explicit MCP config: {mcp_config_abs_path}"
+                        )
                     else:
-                        logger.warning(f"MCP config file {mcp_config_abs_path} is empty, using Claude Code's built-in tools only")
+                        logger.warning(
+                            f"MCP config file {mcp_config_abs_path} is empty, using Claude Code's built-in tools only"
+                        )
                 except (json.JSONDecodeError, OSError) as e:
-                    logger.warning(f"MCP config file {mcp_config_abs_path} is invalid JSON ({e}), using Claude Code's built-in tools only")
+                    logger.warning(
+                        f"MCP config file {mcp_config_abs_path} is invalid JSON ({e}), using Claude Code's built-in tools only"
+                    )
             else:
-                logger.debug(f"MCP config file not found at {self.mcp_config_path}, using Claude Code's built-in tools only")
+                logger.debug(
+                    f"MCP config file not found at {self.mcp_config_path}, using Claude Code's built-in tools only"
+                )
 
             # Set up environment - ensure all environment variables are passed
             env = dict(os.environ)
@@ -323,15 +364,17 @@ class ClaudeCodeAgent:
 
         # Check if we're running in a container by looking for container-specific indicators
         in_container = (
-            os.path.exists("/.dockerenv") or 
-            os.path.exists("/app/.claude") or
-            os.environ.get("CLAUDE_CONFIG_DIR") == "/app/.claude"
+            os.path.exists("/.dockerenv")
+            or os.path.exists("/app/.claude")
+            or os.environ.get("CLAUDE_CONFIG_DIR") == "/app/.claude"
         )
 
         # In container, use the pre-installed Claude CLI path first
         if in_container:
             container_claude_path = "/usr/local/bin/claude"
-            if os.path.exists(container_claude_path) and os.access(container_claude_path, os.X_OK):
+            if os.path.exists(container_claude_path) and os.access(
+                container_claude_path, os.X_OK
+            ):
                 logger.debug(f"Using container Claude CLI: {container_claude_path}")
                 return container_claude_path
 

@@ -127,6 +127,11 @@ def cli(debug: bool, no_banner: bool) -> None:
     type=click.Path(exists=True, path_type=Path),
     help="Path to .env file for environment variables. Defaults to .env in current directory.",
 )
+@click.option(
+    "--allowed-tools",
+    type=str,
+    help="Comma-separated list of additional MCP tool prefixes to allow (e.g., 'mcp__sqlite,mcp__github'). Built-in tools are always allowed.",
+)
 def eval(
     prompt_file: Path,
     mcp_config: Path,
@@ -136,6 +141,7 @@ def eval(
     verbose: bool,
     no_progress: bool,
     env_file: Path | None,
+    allowed_tools: str | None,
 ) -> None:
     """Evaluate a prompt file using Claude Code CLI with optional MCP servers.
 
@@ -167,6 +173,9 @@ def eval(
       # Custom output location
       smolval eval prompts/batch-task.txt --format csv --output batch-results.csv
 
+      # Allow specific MCP tools beyond built-in tools
+      smolval eval prompts/database-task.txt --allowed-tools "mcp__sqlite,mcp__postgres"
+
     \b
     Requirements:
       - Docker installed on host system
@@ -195,7 +204,10 @@ def eval(
             click.echo(f"⏱️  Timeout: {timeout}s")
             if env_file:
                 click.echo(f"🌍 Environment file: {env_file}")
-            click.echo("🔓 Tool permissions: Always allow all tools for evaluation")
+            if allowed_tools:
+                click.echo(f"🔓 Tool permissions: Built-in tools + {allowed_tools}")
+            else:
+                click.echo("🔓 Tool permissions: Built-in tools only")
             click.echo()
 
         # Create agent
@@ -204,6 +216,7 @@ def eval(
             timeout_seconds=timeout,
             verbose=verbose,
             env_file=str(env_file) if env_file else None,
+            allowed_mcp_tools=allowed_tools,
         )
 
         # Run evaluation
