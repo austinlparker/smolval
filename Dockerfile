@@ -25,17 +25,6 @@ RUN apt-get update && apt-get install -y \
 # Install uv (uvx is included)
 RUN pip install --no-cache-dir uv
 
-# Install Claude Code CLI and common MCP servers globally for faster startup
-RUN npm install -g \
-    @anthropic-ai/claude-code \
-    @modelcontextprotocol/server-filesystem \
-    @modelcontextprotocol/server-memory
-
-# Configure Claude CLI environment and verify installation
-ENV CLAUDE_CONFIG_DIR=/app/.claude
-RUN mkdir -p $CLAUDE_CONFIG_DIR \
-    && claude --version
-
 # Create workspace directory for user-mounted content
 RUN mkdir -p /workspace
 
@@ -52,6 +41,17 @@ COPY src/ ./src/
 RUN uv sync --frozen --no-dev && \
     uv build && \
     uv pip install --system dist/*.whl
+
+# Install Claude Code CLI and common MCP servers globally for faster startup
+RUN npm install -g \
+    @anthropic-ai/claude-code \
+    @modelcontextprotocol/server-filesystem \
+    @modelcontextprotocol/server-memory
+
+# Configure Claude CLI environment and verify installation
+ENV CLAUDE_CONFIG_DIR=/app/.claude
+RUN mkdir -p $CLAUDE_CONFIG_DIR \
+    && claude --version
 
 # Note: Users should mount their workspace with -v $(pwd):/workspace
 # Example prompts and configs are available in the source repository
@@ -78,4 +78,4 @@ USER smolval
 # MCP configuration: Use .mcp.json files in your workspace, no config directory needed
 
 # Set entrypoint to use the installed smolval command
-ENTRYPOINT ["smolval"]
+ENTRYPOINT ["/app/.venv/bin/smolval"]
