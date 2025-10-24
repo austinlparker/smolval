@@ -5,31 +5,28 @@ import datetime
 import json
 import logging
 import os
-from pathlib import Path
-import sys
 import time
 import uuid
+from pathlib import Path
 
-from dotenv import load_dotenv
-from rich.progress import Progress, SpinnerColumn, TextColumn, TimeElapsedColumn
 from claude_agent_sdk import (
     AssistantMessage,
+    ClaudeAgentOptions,
+    ClaudeSDKClient,
     Message,
     ResultMessage,
     SystemMessage,
     TextBlock,
-    ToolUseBlock,
     ToolResultBlock,
+    ToolUseBlock,
     UserMessage,
-    create_sdk_mcp_server,
-    ClaudeAgentOptions,
-    ClaudeSDKClient,
 )
+from dotenv import load_dotenv
+from rich.progress import Progress, SpinnerColumn, TextColumn, TimeElapsedColumn
+
 from smolval.models.agent import AgentStep, ExecutionMetadata
 
-
 from .models import AgentResult
-
 
 logger = logging.getLogger(__name__)
 
@@ -179,7 +176,7 @@ class ClaudeCodeAgent:
             logger.debug(
                 f"MCP config file not found at {self.mcp_config_path}, using Claude Code's built-in tools only"
             )
-        return {}
+        return None
 
 
 class ClaudeCodeAgentSession:
@@ -189,20 +186,32 @@ class ClaudeCodeAgentSession:
         self.agent = agent
         self.show_progress = show_progress
         mcp_path = agent._find_mcp_path()
-        config_dir = os.getcwd()
-        if mcp_path:
+        config_dir: Path = Path(os.getcwd())
+        if mcp_path is not None:
             config_dir = mcp_path.parent
         options = ClaudeAgentOptions(
-            mcp_servers=mcp_path,
             permission_mode="bypassPermissions",
             allowed_tools=agent._build_allowed_tools_arg(),
             env=agent._build_environment(),
             cwd=config_dir,
         )
+        if mcp_path is not None:
+            options.mcp_servers = mcp_path
         self.client = ClaudeSDKClient(options=options)
         self.current_iteration = 0
         self.steps: list[AgentStep] = []
         self.start_time = datetime.datetime.now()
+
+    @staticmethod
+    def _render_content(payload: object) -> str:
+        if payload is None:
+            return ""
+        if isinstance(payload, str):
+            return payload
+        try:
+            return json.dumps(payload, indent=2, default=str)
+        except TypeError:
+            return str(payload)
 
     def _add_step(self, message: Message) -> AgentResult | None:
         iteration = self.current_iteration
@@ -216,7 +225,10 @@ class ClaudeCodeAgentSession:
                     raw_claude_message=message,
                 )
             )
-        elif isinstance(message, AssistantMessage) or isinstance(message, UserMessage):
+        elif isinstance(message, AssistantMessage | UserMessage):
+            model_name = (
+                message.model if isinstance(message, AssistantMessage) else None
+            )
             for block in message.content:
                 if isinstance(block, TextBlock):
                     self.steps.append(
@@ -225,7 +237,7 @@ class ClaudeCodeAgentSession:
                             iteration=iteration,
                             step_type="text_response",
                             content=block.text,
-                            model_used=message.model,
+                            model_used=model_name,
                             raw_claude_message=message,
                         )
                     )
@@ -239,7 +251,7 @@ class ClaudeCodeAgentSession:
                             tool_call_id=block.id,
                             tool_name=block.name,
                             tool_input=block.input,
-                            model_used=message.model,
+                            model_used=model_name,
                             raw_claude_message=message,
                         )
                     )
@@ -249,31 +261,37 @@ class ClaudeCodeAgentSession:
                             step_id=str(uuid.uuid4()),
                             iteration=iteration,
                             step_type="tool_result",
-                            content=block.content,
+                            content=self._render_content(block.content),
                             tool_call_id=block.tool_use_id,
-                            tool_output=block.content,
-                            tool_error=not not block.is_error,
+                            tool_output=self._render_content(block.content),
+                            tool_error=bool(block.is_error),
                             raw_claude_message=message,
                         )
                     )
         elif isinstance(message, ResultMessage):
+            result_text = (
+                message.result
+                if isinstance(message.result, str)
+                else self._render_content(message.result)
+            )
             return AgentResult(
                 success=not message.is_error,
-                final_answer=message.result,
+                final_answer=result_text,
                 steps=self.steps,
                 total_iterations=message.num_turns,
                 execution_time_seconds=message.duration_ms / 1000,
                 metadata=ExecutionMetadata(
                     session_id=message.session_id,
-                    model_used="unknown",
                     execution_start=self.start_time,
                     execution_end=datetime.datetime.now(),
                 ),
             )
+        return None
 
     async def run(self, prompt: str) -> AgentResult:
         await self.client.connect()
-        start_time = time.time()
+        start_time = datetime.datetime.now()
+        start_timestamp = time.time()
 
         try:
             # Log initialization step
@@ -308,12 +326,11 @@ class ClaudeCodeAgentSession:
                 error_message="No result message received - Claude Code execution timed out",
                 steps=[],
                 total_iterations=0,
-                execution_time_seconds=0.0,
+                execution_time_seconds=time.time() - start_timestamp,
                 metadata=ExecutionMetadata(
                     session_id=str(uuid.uuid4()),
-                    model_used="unknown",
                     execution_start=start_time,
-                    execution_end=time.time(),
+                    execution_end=datetime.datetime.now(),
                 ),
             )
 
@@ -325,15 +342,12 @@ class ClaudeCodeAgentSession:
                 error_message=str(e),
                 steps=[],
                 total_iterations=0,
-                execution_time_seconds=0.0,
-                metadata={
-                    ExecutionMetadata(
-                        session_id=str(uuid.uuid4()),
-                        model_used="unknown",
-                        execution_start=start_time,
-                        execution_end=time.time(),
-                    )
-                },
+                execution_time_seconds=time.time() - start_timestamp,
+                metadata=ExecutionMetadata(
+                    session_id=str(uuid.uuid4()),
+                    execution_start=start_time,
+                    execution_end=datetime.datetime.now(),
+                ),
             )
         finally:
             await self.client.disconnect()

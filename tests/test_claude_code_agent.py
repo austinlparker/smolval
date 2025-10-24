@@ -1,7 +1,7 @@
 """Tests for ClaudeCodeAgent."""
 
 import asyncio
-from unittest.mock import AsyncMock, Mock, patch
+from unittest.mock import patch
 
 import pytest
 

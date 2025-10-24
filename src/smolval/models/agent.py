@@ -5,8 +5,6 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
-from claude_agent_sdk import Message
-
 
 class AgentStep(BaseModel):
     """Represents a single step in the agent's execution."""
@@ -38,10 +36,11 @@ class ExecutionMetadata(BaseModel):
     session_id: str
     execution_start: datetime
     execution_end: datetime
+    model_used: str | None = None
     total_cost_usd: float | None = None
     total_usage: dict[str, Any] | None = None
-    mcp_servers_used: list[str] = []
-    tools_available: list[str] = []
+    mcp_servers_used: list[str] = Field(default_factory=list)
+    tools_available: list[str] = Field(default_factory=list)
 
 
 class AgentResult(BaseModel):
